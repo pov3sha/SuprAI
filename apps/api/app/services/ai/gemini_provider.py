@@ -9,7 +9,10 @@ from app.services.ai.base import ModelResponse, UsageMetrics
 class GeminiProvider:
     def __init__(self, role_name: str = "consultant", model_name: Optional[str] = None):
         if not settings.GEMINI_API_KEY:
-            raise ConfigurationError("GEMINI_API_KEY is not configured.")
+            raise ConfigurationError("GEMINI_API_KEY is not configured in .env.")
+
+        if settings.GEMINI_API_KEY.startswith("AQ."):
+            logger.warning("GEMINI_API_KEY starts with 'AQ.' (OAuth token). Google AI Studio API keys start with 'AIzaSy...'.")
 
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.role_name = role_name
@@ -77,5 +80,12 @@ class GeminiProvider:
             )
         except Exception as e:
             elapsed = int((time.time() - start_time) * 1000)
-            logger.error(f"GEMINI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={e}")
+            err_str = str(e)
+            logger.error(f"GEMINI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={err_str}")
+            if "401" in err_str or "ACCESS_TOKEN_TYPE_UNSUPPORTED" in err_str or "invalid authentication" in err_str.lower():
+                raise RuntimeError(
+                    f"Gemini API key authentication failed (HTTP 401). "
+                    f"The configured GEMINI_API_KEY ('{settings.GEMINI_API_KEY[:8]}...') is an OAuth token string instead of a Google AI Studio API Key. "
+                    f"Please generate a free Gemini API Key (starts with 'AIzaSy...') at https://aistudio.google.com/app/apikey and paste it into suprai/.env."
+                )
             raise RuntimeError(f"Gemini execution failed for role '{self.role_name}' model '{self.model}': {e}")
