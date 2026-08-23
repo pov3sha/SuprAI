@@ -76,9 +76,10 @@ class OpenAIProvider:
             )
         except Exception as e:
             elapsed = int((time.time() - start_time) * 1000)
-            logger.error(f"OPENAI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={e}")
-            if "401" in str(e) or "invalid_api_key" in str(e):
-                logger.warning(f"OpenAI API key invalid (401), falling back to local Ollama provider for role '{self.role_name}'")
+            err_str = str(e)
+            logger.error(f"OPENAI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={err_str}")
+            if "401" in err_str or "invalid_api_key" in err_str or "429" in err_str or "insufficient_quota" in err_str:
+                logger.warning(f"OpenAI API quota/auth issue ({err_str[:60]}), falling back to local Ollama provider for role '{self.role_name}'")
                 from app.services.ai.ollama_provider import OllamaProvider
                 return OllamaProvider(role_name=self.role_name).generate(
                     prompt=prompt,

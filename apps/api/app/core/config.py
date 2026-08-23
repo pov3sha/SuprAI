@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = os.getenv("MINIO_BUCKET", "suprai-documents")
     MINIO_USE_SSL: bool = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
     
-    # Provider API Credentials
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    # Provider API Credentials (auto-strip whitespace)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip()
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
     
     # Default Provider Handoff
     AI_DEFAULT_PROVIDER: str = os.getenv("AI_DEFAULT_PROVIDER", "openai")
