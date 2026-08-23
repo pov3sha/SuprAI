@@ -1,35 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Cpu, CheckCircle, XCircle } from 'lucide-react';
+import { Cpu, CheckCircle, MinusCircle } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
-interface HealthData {
-  status: string;
-  engine: string;
-  providers: {
-    ollama: string;
-    model: string;
-  };
-  role_routing: {
-    manager: string;
-    consultant: string;
-    analyst: string;
-    researcher: string;
-  };
+interface ProviderHealth {
+  openai: string;
+  gemini: string;
 }
 
 export const Header: React.FC = () => {
-  const [health, setHealth] = useState<HealthData | null>(null);
+  const [providers, setProviders] = useState<ProviderHealth>({
+    openai: 'checking',
+    gemini: 'checking',
+  });
 
   useEffect(() => {
     fetch(`${API_BASE}/health`)
       .then((res) => res.json())
-      .then((data) => setHealth(data))
-      .catch(() => setHealth(null));
+      .then((data) => {
+        if (data.providers) {
+          setProviders(data.providers);
+        }
+      })
+      .catch(() => {
+        setProviders({ openai: 'missing', gemini: 'missing' });
+      });
   }, []);
-
-  const isConnected = health?.providers?.ollama === 'verified' || health?.status === 'healthy';
-  const modelName = health?.providers?.model || 'qwen2.5:0.5b';
 
   return (
     <header className="h-14 border-b border-[#263347] bg-[#0E131F] flex items-center justify-between px-6 text-white select-none">
@@ -40,35 +36,40 @@ export const Header: React.FC = () => {
         </div>
         <div>
           <h1 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-            SuprAI <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1B2433] text-[#94A3B8] border border-[#263347]">Ollama Engine</span>
+            SuprAI <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1B2433] text-[#94A3B8] border border-[#263347]">Multi-Model Engine</span>
           </h1>
-          <p className="text-[10px] text-[#94A3B8]">Autonomous AI Work Organization</p>
+          <p className="text-[10px] text-[#94A3B8]">Autonomous AI Work Organization (OpenAI + Gemini)</p>
         </div>
       </div>
 
-      {/* Ollama Runtime Diagnostic Status */}
+      {/* Provider Status Indicators */}
       <div className="flex items-center gap-3 text-xs font-medium">
-        <div className={`flex items-center gap-2 px-3 py-1 rounded-md border text-xs ${
-          isConnected
+        {/* OpenAI Status */}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] ${
+          providers.openai === 'configured'
             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+            : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
         }`}>
-          {isConnected ? (
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+          {providers.openai === 'configured' ? (
+            <CheckCircle className="w-3 h-3 text-emerald-400" />
           ) : (
-            <XCircle className="w-3.5 h-3.5 text-rose-400" />
+            <MinusCircle className="w-3 h-3 text-slate-500" />
           )}
-          <span>{isConnected ? `● Ollama Connected (${modelName})` : '● Ollama Offline'}</span>
+          <span>OpenAI (GPT) {providers.openai === 'configured' ? 'Connected' : 'Not Configured'}</span>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-[11px] text-[#94A3B8] bg-[#161F2E] px-3 py-1 rounded-md border border-[#263347]">
-          <span>Manager: <strong className="text-emerald-400">Ready</strong></span>
-          <span className="text-slate-600">•</span>
-          <span>Consultant: <strong className="text-emerald-400">Ready</strong></span>
-          <span className="text-slate-600">•</span>
-          <span>Analyst: <strong className="text-emerald-400">Ready</strong></span>
-          <span className="text-slate-600">•</span>
-          <span>Researcher: <strong className="text-emerald-400">Ready</strong></span>
+        {/* Gemini Status */}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] ${
+          providers.gemini === 'configured'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
+        }`}>
+          {providers.gemini === 'configured' ? (
+            <CheckCircle className="w-3 h-3 text-emerald-400" />
+          ) : (
+            <MinusCircle className="w-3 h-3 text-slate-500" />
+          )}
+          <span>Gemini {providers.gemini === 'configured' ? 'Connected' : 'Not Configured'}</span>
         </div>
       </div>
     </header>
