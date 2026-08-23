@@ -7,7 +7,21 @@ import { ChatWorkspace } from '@/components/ChatWorkspace';
 import { OrgDiagram } from '@/components/OrgDiagram';
 import { LiveFeed } from '@/components/LiveFeed';
 import { EvidenceDrawer } from '@/components/EvidenceDrawer';
-import { fetchProjects, createProject, deleteProject, deleteAllProjects, uploadProjectFile, submitObjective, fetchConversationHistory } from '@/lib/api';
+import { ProjectsView } from '@/components/views/ProjectsView';
+import { OrganizationView } from '@/components/views/OrganizationView';
+import { FilesView } from '@/components/views/FilesView';
+import { ActivityView } from '@/components/views/ActivityView';
+import {
+  fetchProjects,
+  createProject,
+  deleteProject,
+  deleteAllProjects,
+  fetchProjectFiles,
+  uploadProjectFile,
+  deleteFile,
+  submitObjective,
+  fetchConversationHistory,
+} from '@/lib/api';
 import { useSSE } from '@/lib/useSSE';
 import { Project, FileRecord, Message, Task, Evidence } from '@/lib/types';
 
@@ -38,6 +52,7 @@ export default function DashboardPage() {
       } else {
         setActiveProject(null);
         setConversationId(null);
+        setFiles([]);
         setMessages([]);
         setTasks([]);
         setEvidenceList([]);
@@ -49,9 +64,19 @@ export default function DashboardPage() {
 
   const selectProject = async (proj: Project) => {
     setActiveProject(proj);
+    loadProjectFiles(proj.id);
     if (proj.default_conversation_id) {
       setConversationId(proj.default_conversation_id);
       loadHistory(proj.default_conversation_id);
+    }
+  };
+
+  const loadProjectFiles = async (projectId: string) => {
+    try {
+      const fileList = await fetchProjectFiles(projectId);
+      setFiles(fileList);
+    } catch (e) {
+      console.error('Failed to load project files:', e);
     }
   };
 
@@ -96,6 +121,7 @@ export default function DashboardPage() {
         } else {
           setActiveProject(null);
           setConversationId(null);
+          setFiles([]);
           setMessages([]);
           setTasks([]);
           setEvidenceList([]);
@@ -112,6 +138,7 @@ export default function DashboardPage() {
       setProjects([]);
       setActiveProject(null);
       setConversationId(null);
+      setFiles([]);
       setMessages([]);
       setTasks([]);
       setEvidenceList([]);
@@ -124,12 +151,24 @@ export default function DashboardPage() {
     if (!activeProject) return;
     setIsUploading(true);
     try {
-      const fileRec = await uploadProjectFile(activeProject.id, file);
-      setFiles((prev) => [...prev, fileRec]);
+      await uploadProjectFile(activeProject.id, file);
+      await loadProjectFiles(activeProject.id);
+      loadProjects();
     } catch (e) {
       console.error('File upload failed:', e);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    try {
+      await deleteFile(fileId);
+      if (activeProject) {
+        loadProjectFiles(activeProject.id);
+      }
+    } catch (e) {
+      console.error('Failed to delete file:', e);
     }
   };
 
@@ -171,7 +210,7 @@ export default function DashboardPage() {
               id: p.task_id,
               objective: p.objective,
               status: 'QUEUED',
-              worker: 'Ollama Worker',
+              worker: p.role || 'Worker',
               priority: p.priority || 'high',
             },
           ];
@@ -181,7 +220,7 @@ export default function DashboardPage() {
       const p = latestEvent.payload;
       if (p && p.task_id) {
         setTasks((prev) =>
-          prev.map((t) => (t.id === p.task_id ? { ...t, status: 'RUNNING', worker: p.agent_name || 'Worker' } : t))
+          prev.map((t) => (t.id === p.task_id ? { ...t, status: 'RUNNING', worker: p.agent_name || p.provider || 'Worker' } : t))
         );
       }
     } else if (latestEvent.event_type === 'agent_completed') {
@@ -220,19 +259,49 @@ export default function DashboardPage() {
           onCloseModal={() => setForceOpenModal(false)}
         />
 
-        {/* Center Workspace */}
-        <ChatWorkspace
-          activeProject={activeProject}
-          messages={messages}
-          onSubmitObjective={handleSubmitObjective}
-          isProcessing={isProcessing}
-          onSelectEvidence={(ev) => setSelectedEvidence(ev)}
-          evidenceList={evidenceList}
-          onOpenCreateProject={() => setForceOpenModal(true)}
-        />
+        {/* Center Dynamic Workspace Area */}
+        {activeNav === 'dashboard' && (
+          <ChatWorkspace
+            activeProject={activeProject}
+            messages={messages}
+            onSubmitObjective={handleSubmitObjective}
+            isProcessing={isProcessing}
+            onSelectEvidence={(ev) => setSelectedEvidence(ev)}
+            evidenceList={evidenceList}
+            onOpenCreateProject={() => setForceOpenModal(true)}
+          />
+        )}
+
+        {activeNav === 'projects' && (
+          <ProjectsView
+            projects={projects}
+            activeProject={activeProject}
+            onSelectProject={(proj) => {
+              selectProject(proj);
+              setActiveNav('dashboard');
+            }}
+            onCreateProjectClick={() => setForceOpenModal(true)}
+            onDeleteProject={handleDeleteProject}
+            onClearAll={handleClearAll}
+          />
+        )}
+
+        {activeNav === 'organization' && <OrganizationView />}
+
+        {activeNav === 'files' && (
+          <FilesView
+            activeProject={activeProject}
+            files={files}
+            isUploading={isUploading}
+            onFileUpload={handleFileUpload}
+            onDeleteFile={handleDeleteFile}
+          />
+        )}
+
+        {activeNav === 'activity' && <ActivityView events={events} />}
 
         {/* Right AI Organization Panel */}
-        <div className="w-80 border-l border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)]">
+        <div className="w-80 border-l border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)] shrink-0">
           <OrgDiagram tasks={tasks} isProcessing={isProcessing} />
           <LiveFeed events={events} />
         </div>

@@ -32,6 +32,12 @@ export async function deleteAllProjects(): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete all projects');
 }
 
+export async function fetchProjectFiles(projectId: string): Promise<FileRecord[]> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/files`);
+  if (!res.ok) throw new Error('Failed to fetch project files');
+  return res.json();
+}
+
 export async function uploadProjectFile(projectId: string, file: File): Promise<FileRecord> {
   const formData = new FormData();
   formData.append('file', file);
@@ -42,6 +48,13 @@ export async function uploadProjectFile(projectId: string, file: File): Promise<
   });
   if (!res.ok) throw new Error('Failed to upload file');
   return res.json();
+}
+
+export async function deleteFile(fileId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/files/${fileId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete file');
 }
 
 export async function submitObjective(conversationId: string, prompt: string): Promise<{ status: string }> {

@@ -61,6 +61,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       onFileUpload(e.target.files[0]);
+      e.target.value = '';
     }
   };
 
@@ -73,10 +74,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   ];
 
   return (
-    <aside className="w-60 border-r border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)] text-white">
+    <aside className="w-60 border-r border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)] text-white select-none">
       {/* Navigation section */}
       <div className="p-4 space-y-1 border-b border-[#263347]">
-        <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Workspace</div>
+        <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Workspace Navigation</div>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeNav === item.id;
@@ -84,7 +85,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveNav(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition cursor-pointer ${
                 isActive ? 'bg-[#6366F1]/10 text-[#6366F1] border border-[#6366F1]/20' : 'text-[#94A3B8] hover:bg-[#1B2433] hover:text-white'
               }`}
             >
@@ -102,8 +103,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           <div className="flex items-center gap-1">
             {projects.length > 0 && (
               <button
-                onClick={onClearAll}
-                className="p-1 rounded text-rose-400 hover:bg-rose-500/10 transition"
+                onClick={() => {
+                  if (confirm('Are you sure you want to clear all projects?')) {
+                    onClearAll();
+                  }
+                }}
+                className="p-1 rounded text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
                 title="Clear All Projects"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -111,7 +116,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             )}
             <button
               onClick={() => setShowModal(true)}
-              className="p-1 rounded text-[#94A3B8] hover:text-white hover:bg-[#1B2433] transition"
+              className="p-1 rounded text-[#94A3B8] hover:text-white hover:bg-[#1B2433] transition cursor-pointer"
               title="Create Project"
             >
               <Plus className="w-4 h-4" />
@@ -121,10 +126,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
         {projects.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-[#94A3B8] text-xs">
-            <p className="mb-2">No projects.</p>
+            <p className="mb-2 text-[11px]">No projects active.</p>
             <button
               onClick={() => setShowModal(true)}
-              className="px-3 py-1.5 rounded-md bg-[#6366F1] text-white font-medium hover:bg-indigo-600 transition text-xs"
+              className="px-3 py-1.5 rounded-md bg-[#6366F1] text-white font-medium hover:bg-indigo-600 transition text-xs cursor-pointer"
             >
               + New Project
             </button>
@@ -152,7 +157,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                       e.stopPropagation();
                       onDeleteProject(p.id);
                     }}
-                    className="p-1 text-[#94A3B8] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition"
+                    className="p-1 text-[#94A3B8] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition cursor-pointer"
                     title="Delete Project"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -168,19 +173,24 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       {activeProject && (
         <div className="p-4 border-t border-[#263347] bg-[#0E131F]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider">Project Files</span>
+            <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider">Project Documents</span>
           </div>
 
           <label className="flex items-center justify-center gap-2 w-full p-2 border border-dashed border-[#263347] rounded-md text-xs text-[#94A3B8] hover:border-[#6366F1] hover:text-white cursor-pointer transition">
             <FileText className="w-3.5 h-3.5" />
-            <span>{isUploading ? 'Extracting...' : '+ Attach PDF'}</span>
-            <input type="file" accept=".pdf,.txt" onChange={handleFileChange} className="hidden" />
+            <span>{isUploading ? 'Uploading Document...' : '+ Attach Document'}</span>
+            <input
+              type="file"
+              accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.json,.txt,.md"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </label>
 
-          <div className="mt-2 space-y-1 max-h-28 overflow-y-auto">
+          <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
             {files.map((f) => (
               <div key={f.id} className="flex items-center justify-between p-1.5 rounded bg-[#141A26] text-[11px] text-slate-300 border border-[#263347]">
-                <span className="truncate max-w-[120px]">{f.filename}</span>
+                <span className="truncate max-w-[120px] font-mono text-[10px]">{f.filename}</span>
                 <span className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
                   <FileCheck className="w-3 h-3" />
                   {f.page_count} pgs
