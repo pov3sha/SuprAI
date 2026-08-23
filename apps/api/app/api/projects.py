@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 from app.db.base import get_db
 from app.models.schema import Project, Conversation
@@ -69,6 +70,13 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
 
 @router.delete("/projects", tags=["Projects"])
 def delete_all_projects(db: Session = Depends(get_db)):
-    db.query(Project).delete()
-    db.commit()
+    try:
+        db.execute(text("TRUNCATE TABLE projects, conversations, messages, files, file_chunks, tasks, evidence, usage_records CASCADE;"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        projects = db.query(Project).all()
+        for p in projects:
+            db.delete(p)
+        db.commit()
     return {"status": "cleared"}
