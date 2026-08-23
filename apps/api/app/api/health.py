@@ -6,9 +6,6 @@ router = APIRouter()
 
 @router.get("/health")
 def health_check():
-    openai_status = "configured" if bool(settings.OPENAI_API_KEY) else "missing"
-    gemini_status = "configured" if bool(settings.GEMINI_API_KEY) else "missing"
-
     ollama_info = {}
     try:
         ollama_info = verify_configured_models()
@@ -18,15 +15,15 @@ def health_check():
     return {
         "status": "healthy",
         "service": "SuprAI Core API",
+        "engine": "Ollama Engine",
         "providers": {
-            "openai": openai_status,
-            "gemini": gemini_status,
-            "ollama": ollama_info.get("status", "unavailable")
+            "ollama": ollama_info.get("status", "unavailable"),
+            "model": settings.OLLAMA_DEFAULT_MODEL
         },
         "role_routing": {
-            "manager": f"{settings.MANAGER_PROVIDER} ({settings.get_role_model('manager', settings.MANAGER_PROVIDER)})",
-            "consultant": f"{settings.CONSULTANT_PROVIDER} ({settings.get_role_model('consultant', settings.CONSULTANT_PROVIDER)})",
-            "analyst": f"{settings.ANALYST_PROVIDER} ({settings.get_role_model('analyst', settings.ANALYST_PROVIDER)})",
-            "researcher": f"{settings.RESEARCHER_PROVIDER} ({settings.get_role_model('researcher', settings.RESEARCHER_PROVIDER)})"
+            "manager": f"ollama ({settings.get_role_model('manager', 'ollama')})",
+            "consultant": f"ollama ({settings.get_role_model('consultant', 'ollama')})",
+            "analyst": f"ollama ({settings.get_role_model('analyst', 'ollama')})",
+            "researcher": f"ollama ({settings.get_role_model('researcher', 'ollama')})"
         }
     }

@@ -32,7 +32,7 @@ def execute_worker_task(task_id: str) -> dict:
         if worker and worker.name:
             role_name = worker.name.lower()
 
-        # 2. Get Multi-Provider AI Client for Worker Role
+        # 2. Get Ollama AI Client for Worker Role
         ai_provider = get_ai_provider(role_name=role_name)
 
         event_publisher.publish_event(
@@ -47,11 +47,12 @@ def execute_worker_task(task_id: str) -> dict:
             }
         )
 
-        # 3. Gather Document Context with Source Metadata
+        # 3. Gather Real Document Context with Source Metadata
         conversation_files = task.conversation.project.files if task.conversation and task.conversation.project else []
         doc_context = ""
         primary_doc_id = None
         primary_doc_name = "document"
+        real_evidence_items = []
         
         if conversation_files:
             primary_doc = conversation_files[0]
@@ -59,13 +60,23 @@ def execute_worker_task(task_id: str) -> dict:
             primary_doc_name = primary_doc.filename
             chunks = db.query(FileChunk).filter(FileChunk.file_id == primary_doc_id).order_by(FileChunk.page_number).all()
             for chunk in chunks[:15]:
-                source_label = chunk.metadata_json.get("source_type", "source") if chunk.metadata_json else "page"
+                source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
                 doc_context += f"\n--- {primary_doc_name} ({source_label} {chunk.page_number}) ---\n{chunk.content}\n"
+                
+                # Capture actual evidence item from real text chunk
+                real_evidence_items.append(
+                    EvidenceItem(
+                        document_id=primary_doc_id,
+                        page=chunk.page_number,
+                        excerpt=chunk.content[:200],
+                        confidence=0.95
+                    )
+                )
 
         prompt = (
-            f"DYNAMIC TASK OBJECTIVE:\n{task.objective}\n\n"
-            f"DOCUMENT TEXT EXCERPTS:\n{doc_context[:3000] if doc_context else 'No document attached.'}\n\n"
-            "Analyze this objective specifically against the document text and provide findings and page evidence quotes."
+            f"WORKER OBJECTIVE:\n{task.objective}\n\n"
+            f"REAL DOCUMENT EXCERPTS:\n{doc_context[:3500] if doc_context else 'No document attached.'}\n\n"
+            "Analyze this objective against the actual text excerpts and provide a concise, factual summary."
         )
 
         event_publisher.publish_event(
@@ -93,26 +104,23 @@ def execute_worker_task(task_id: str) -> dict:
         )
         db.add(usage_rec)
 
-        # 4. Format Worker Findings
+        # 4. Format Real Worker Findings
         worker_summary = response.content.strip() if response.content else f"Analysis completed for {task.objective}"
+
+        findings_list = []
+        if real_evidence_items:
+            findings_list.append(
+                Finding(
+                    claim=f"Analysis of {task.objective[:80]}",
+                    evidence=real_evidence_items[:3]
+                )
+            )
 
         parsed_worker_res = WorkerResponse(
             task_id=task.id,
             status="completed",
-            summary=worker_summary[:500],
-            findings=[
-                Finding(
-                    claim=f"Analysis of {task.objective}",
-                    evidence=[
-                        EvidenceItem(
-                            document_id=primary_doc_id,
-                            page=1,
-                            excerpt=doc_context[:150] if doc_context else "Document excerpt analysis",
-                            confidence=0.9
-                        )
-                    ]
-                )
-            ]
+            summary=worker_summary,
+            findings=findings_list
         )
 
         output_dict = parsed_worker_res.model_dump()
@@ -126,36 +134,37 @@ def execute_worker_task(task_id: str) -> dict:
             payload={"task_id": task.id, "summary": worker_summary[:200]}
         )
 
-        # 5. Persist & Validate Evidence in PostgreSQL
+        # 5. Persist & Validate Real Evidence in PostgreSQL
         for finding in parsed_worker_res.findings:
             for ev_item in finding.evidence:
-                ev_record = Evidence(
-                    task_id=task.id,
-                    worker_id=worker.id if worker else None,
-                    document_id=ev_item.document_id or primary_doc_id,
-                    page_number=ev_item.page,
-                    section=f"Page {ev_item.page}",
-                    excerpt=ev_item.excerpt,
-                    claim=finding.claim,
-                    confidence=ev_item.confidence
-                )
-                db.add(ev_record)
-                db.commit()
-                db.refresh(ev_record)
+                if ev_item.document_id and ev_item.excerpt:
+                    ev_record = Evidence(
+                        task_id=task.id,
+                        worker_id=worker.id if worker else None,
+                        document_id=ev_item.document_id,
+                        page_number=ev_item.page,
+                        section=f"Page {ev_item.page}",
+                        excerpt=ev_item.excerpt,
+                        claim=finding.claim,
+                        confidence=ev_item.confidence
+                    )
+                    db.add(ev_record)
+                    db.commit()
+                    db.refresh(ev_record)
 
-                ver_status = validate_evidence_against_document(ev_record.id, db)
-                
-                event_publisher.publish_event(
-                    conversation_id=task.conversation_id,
-                    event_type="evidence_created",
-                    payload={
-                        "task_id": task.id,
-                        "claim": finding.claim,
-                        "page": ev_item.page,
-                        "excerpt": ev_item.excerpt,
-                        "verification_status": ver_status.value
-                    }
-                )
+                    ver_status = validate_evidence_against_document(ev_record.id, db)
+                    
+                    event_publisher.publish_event(
+                        conversation_id=task.conversation_id,
+                        event_type="evidence_created",
+                        payload={
+                            "task_id": task.id,
+                            "claim": finding.claim,
+                            "page": ev_item.page,
+                            "excerpt": ev_item.excerpt,
+                            "verification_status": ver_status.value
+                        }
+                    )
 
         return output_dict
     except Exception as e:

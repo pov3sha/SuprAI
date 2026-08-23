@@ -10,7 +10,7 @@ from loguru import logger
 from app.models.schema import Conversation, Message, Task, TaskStatus, FileChunk, Evidence, VerificationStatus
 from app.services.ai.factory import get_ai_provider
 from app.core.config import settings, ConfigurationError
-from app.services.prompts.system_prompts import MANAGER_SYSTEM_PROMPT
+from app.services.prompts.system_prompts import MANAGER_SYSTEM_PROMPT, MANAGER_SYNTHESIS_SYSTEM_PROMPT
 from app.services.workers.executor_interface import task_executor
 from app.services.events.publisher import event_publisher
 
@@ -40,7 +40,7 @@ class ManagerOrchestrator:
         self._publish_state_transition(conversation_id, execution_id, current_state, ExecutionState.PLANNING, "Starting objective analysis")
 
         try:
-            # 1. Instantiate Manager AI Provider dynamically
+            # 1. Instantiate Manager AI Provider dynamically (Ollama)
             manager_provider = get_ai_provider(role_name="manager")
             logger.info(f"Manager AI Provider initialized: {manager_provider.provider} ({manager_provider.model})")
 
@@ -58,10 +58,10 @@ class ManagerOrchestrator:
             doc_context_summary = ""
             for f_rec in files[:5]:
                 chunks = db.query(FileChunk).filter(FileChunk.file_id == f_rec.id).order_by(FileChunk.page_number).all()
-                doc_context_summary += f"\nFILE: {f_rec.filename} ({len(chunks)} chunks/pages)\n"
+                doc_context_summary += f"\nDOCUMENT: {f_rec.filename} ({len(chunks)} chunks/pages)\n"
                 for chunk in chunks[:10]:
-                    source_label = chunk.metadata_json.get("source_type", "source") if chunk.metadata_json else "page"
-                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:350]}\n"
+                    source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
+                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:400]}\n"
 
             # 4. Manager AI Dynamic Workflow Decision (Simple vs Complex Delegation)
             manager_decomp_prompt = (
@@ -72,7 +72,7 @@ class ManagerOrchestrator:
                 "[\n"
                 "  {\"objective\": \"Task 1 description\", \"role\": \"analyst\", \"capability\": \"document_analysis\"}\n"
                 "]\n"
-                "If simple summary/question, return an empty array: []"
+                "If simple question or direct summary, return an empty array: []"
             )
 
             decomp_res = manager_provider.generate(
@@ -100,16 +100,16 @@ class ManagerOrchestrator:
                     logger.warning(f"Could not parse dynamic tasks JSON: {e}")
 
             # 5. Execution State Machine: Direct Synthesis vs Parallel Workers
-            if not dynamic_tasks and ("summarize" in prompt.lower() or len(prompt.split()) < 8):
-                # Simple objective -> Direct Manager Synthesis
+            if not dynamic_tasks and ("summarize" in prompt.lower() or len(prompt.split()) < 6):
+                # Direct Manager Synthesis
                 self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.SYNTHESIZING, "Direct Manager synthesis")
                 final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, [], execution_id)
             else:
                 # Complex objective -> Task Graph & Parallel Workers
                 if not dynamic_tasks:
                     dynamic_tasks = [
-                        {"objective": f"Analyze document context for {prompt[:30]}", "role": "analyst", "capability": "document_analysis"},
-                        {"objective": f"Formulate strategy recommendations for {prompt[:30]}", "role": "consultant", "capability": "strategy"}
+                        {"objective": f"Analyze document context for {prompt[:40]}", "role": "analyst", "capability": "document_analysis"},
+                        {"objective": f"Formulate strategy recommendations for {prompt[:40]}", "role": "consultant", "capability": "strategy"}
                     ]
 
                 self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.RUNNING, "Executing task graph")
@@ -181,21 +181,43 @@ class ManagerOrchestrator:
     def _synthesize_final_deliverable(self, manager_provider, conversation_id: str, prompt: str, doc_context: str, worker_outputs: List[Dict[str, Any]], execution_id: str) -> str:
         synthesis_prompt = (
             f"USER OBJECTIVE: '{prompt}'\n\n"
-            f"DOCUMENT CONTEXT:\n{doc_context if doc_context else 'No document attached.'}\n\n"
-            f"WORKER FINDINGS:\n{json.dumps(worker_outputs, indent=2) if worker_outputs else 'Direct Manager analysis.'}\n\n"
-            "Produce a comprehensive, highly structured, professional natural language deliverable answering the user's objective.\n"
-            "Include inline source citations like '[Source: filename, Page N]' where applicable.\n"
-            "Format cleanly with Markdown headings, bullet points, recommendations, and actionable implementation steps."
+            f"ATTACHED DOCUMENT CONTENT:\n{doc_context if doc_context else 'No document attached.'}\n\n"
+            f"WORKER ANALYSIS FINDINGS:\n{json.dumps(worker_outputs, indent=2) if worker_outputs else 'Direct Manager analysis.'}\n\n"
+            "Produce a comprehensive, highly structured, professional natural language deliverable answering the user's prompt.\n"
+            "DO NOT output raw JSON or JSON dictionary objects. Output clear Markdown text with headings (#, ##), bullet points, and actionable implementation steps."
         )
 
         res = manager_provider.generate(
             prompt=synthesis_prompt,
-            system_instruction=MANAGER_SYSTEM_PROMPT,
+            system_instruction=MANAGER_SYNTHESIS_SYSTEM_PROMPT,
             temperature=0.3,
             execution_id=execution_id
         )
 
         content = res.content.strip() if res.content else ""
+
+        # Clean JSON wrappers if model outputted raw JSON dict
+        if content.startswith("{") and content.endswith("}"):
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    # Extract text values from dict into Markdown
+                    lines = []
+                    for k, v in parsed.items():
+                        title = k.replace("_", " ").title()
+                        lines.append(f"### {title}\n")
+                        if isinstance(v, list):
+                            for item in v:
+                                lines.append(f"- {item}")
+                        elif isinstance(v, dict):
+                            lines.append(json.dumps(v, indent=2))
+                        else:
+                            lines.append(str(v))
+                        lines.append("\n")
+                    content = "\n".join(lines)
+            except Exception:
+                pass
+
         if not content:
             content = f"Analysis deliverable for objective: {prompt}"
         return content

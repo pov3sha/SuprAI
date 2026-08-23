@@ -75,7 +75,8 @@ class OllamaProvider:
             }
         }
 
-        if json_schema or "json" in prompt.lower():
+        # Set JSON format ONLY when explicitly requested via json_schema
+        if json_schema is not None:
             payload["format"] = "json"
 
         logger.info(f"OLLAMA_REQUEST execution_id={execution_id} agent={self.role_name} model={self.model} url={self.base_url}/api/generate")
