@@ -1,6 +1,8 @@
-import React from 'react';
-import { Shield, Brain, Sparkles, Database, Search } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Brain, Sparkles, Database, Search } from 'lucide-react';
 import { Task } from '../lib/types';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 interface OrgDiagramProps {
   tasks: Task[];
@@ -8,6 +10,24 @@ interface OrgDiagramProps {
 }
 
 export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) => {
+  const [roleRouting, setRoleRouting] = useState<Record<string, string>>({
+    manager: 'openai (gpt-4o-mini)',
+    consultant: 'gemini (gemini-1.5-flash)',
+    analyst: 'openai (gpt-4o-mini)',
+    researcher: 'gemini (gemini-1.5-flash)'
+  });
+
+  useEffect(() => {
+    fetch(`${API_BASE}/health`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.role_routing) {
+          setRoleRouting(data.role_routing);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const getRoleStatus = (roleName: string) => {
     const roleTasks = tasks.filter((t) => (t.worker || '').toLowerCase().includes(roleName.toLowerCase()));
     if (roleTasks.some((t) => t.status === 'RUNNING')) return { status: 'Active', bg: 'bg-amber-500/10 border-amber-500/40 text-amber-400' };
@@ -32,7 +52,7 @@ export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) =
         <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider">AI Organization Structure</span>
         <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Live Hierarchy
+          Multi-Provider Hierarchy
         </span>
       </div>
 
@@ -46,7 +66,7 @@ export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) =
             </div>
             <div>
               <div className="text-xs font-semibold text-white">Manager AI</div>
-              <div className="text-[10px] text-[#94A3B8]">Orchestrator & Synthesizer</div>
+              <div className="text-[10px] text-[#94A3B8] font-mono">{roleRouting.manager}</div>
             </div>
           </div>
           <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded border border-current">{managerStatus.status}</span>
@@ -63,6 +83,7 @@ export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) =
           <div className={`p-2 rounded-md border flex flex-col items-center text-center transition ${consultantStatus.bg}`}>
             <Sparkles className="w-3.5 h-3.5 mb-1" />
             <div className="text-[11px] font-semibold text-slate-200">Consultant</div>
+            <div className="text-[9px] text-[#94A3B8] font-mono truncate max-w-full">{roleRouting.consultant}</div>
             <span className="text-[9px] font-mono mt-1 px-1.5 py-0.2 rounded border border-current">{consultantStatus.status}</span>
           </div>
 
@@ -70,6 +91,7 @@ export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) =
           <div className={`p-2 rounded-md border flex flex-col items-center text-center transition ${analystStatus.bg}`}>
             <Database className="w-3.5 h-3.5 mb-1" />
             <div className="text-[11px] font-semibold text-slate-200">Analyst</div>
+            <div className="text-[9px] text-[#94A3B8] font-mono truncate max-w-full">{roleRouting.analyst}</div>
             <span className="text-[9px] font-mono mt-1 px-1.5 py-0.2 rounded border border-current">{analystStatus.status}</span>
           </div>
 
@@ -77,6 +99,7 @@ export const OrgDiagram: React.FC<OrgDiagramProps> = ({ tasks, isProcessing }) =
           <div className={`p-2 rounded-md border flex flex-col items-center text-center transition ${researcherStatus.bg}`}>
             <Search className="w-3.5 h-3.5 mb-1" />
             <div className="text-[11px] font-semibold text-slate-200">Researcher</div>
+            <div className="text-[9px] text-[#94A3B8] font-mono truncate max-w-full">{roleRouting.researcher}</div>
             <span className="text-[9px] font-mono mt-1 px-1.5 py-0.2 rounded border border-current">{researcherStatus.status}</span>
           </div>
         </div>

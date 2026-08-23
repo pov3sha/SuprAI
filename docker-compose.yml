@@ -78,6 +78,13 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-suprai-documents}
       MINIO_USE_SSL: "false"
       OLLAMA_BASE_URL: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-openai}
+      MANAGER_PROVIDER: ${MANAGER_PROVIDER:-openai}
+      CONSULTANT_PROVIDER: ${CONSULTANT_PROVIDER:-gemini}
+      ANALYST_PROVIDER: ${ANALYST_PROVIDER:-openai}
+      RESEARCHER_PROVIDER: ${RESEARCHER_PROVIDER:-gemini}
 
   frontend:
     build:

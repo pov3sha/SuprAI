@@ -1,21 +1,42 @@
 from typing import Optional
-from app.core.config import settings
-from app.services.ai.base import AIProvider
-from app.services.ai.claude import ClaudeProvider
+from loguru import logger
+from app.core.config import settings, ConfigurationError
 from app.services.ai.openai_provider import OpenAIProvider
-from app.services.ai.gemini import GeminiProvider
+from app.services.ai.gemini_provider import GeminiProvider
 from app.services.ai.ollama_provider import OllamaProvider
 
-def get_ai_provider(provider_name: str, model_name: Optional[str] = None) -> AIProvider:
-    name_lower = provider_name.lower()
-    
-    if "ollama" in name_lower or "local" in name_lower or settings.OLLAMA_BASE_URL:
-        return OllamaProvider(model_name=model_name or settings.MANAGER_MODEL)
-    elif "claude" in name_lower or "anthropic" in name_lower:
-        return ClaudeProvider(model_name=model_name)
-    elif "openai" in name_lower or "gpt" in name_lower:
-        return OpenAIProvider(model_name=model_name)
-    elif "gemini" in name_lower or "google" in name_lower:
-        return GeminiProvider(model_name=model_name)
+def get_ai_provider(role_name: str = "manager", provider_name: Optional[str] = None, model_name: Optional[str] = None):
+    """
+    Factory function dynamically resolving provider and model for a given role (Manager, Consultant, Analyst, Researcher).
+    """
+    selected_provider = (provider_name or settings.get_role_provider(role_name)).lower()
+
+    logger.info(f"AI_FACTORY resolving role='{role_name}' -> provider='{selected_provider}'")
+
+    if "openai" in selected_provider:
+        if not settings.OPENAI_API_KEY:
+            logger.warning(f"OPENAI_API_KEY missing for role {role_name}, falling back to AI_DEFAULT_PROVIDER")
+            if settings.GEMINI_API_KEY:
+                return GeminiProvider(role_name=role_name, model_name=model_name)
+            raise ConfigurationError("OPENAI_API_KEY is not configured.")
+        return OpenAIProvider(role_name=role_name, model_name=model_name)
+
+    elif "gemini" in selected_provider:
+        if not settings.GEMINI_API_KEY:
+            logger.warning(f"GEMINI_API_KEY missing for role {role_name}, falling back to OpenAI")
+            if settings.OPENAI_API_KEY:
+                return OpenAIProvider(role_name=role_name, model_name=model_name)
+            raise ConfigurationError("GEMINI_API_KEY is not configured.")
+        return GeminiProvider(role_name=role_name, model_name=model_name)
+
+    elif "ollama" in selected_provider:
+        return OllamaProvider(role_name=role_name, model_name=model_name)
+
     else:
-        return OllamaProvider(model_name=model_name or settings.MANAGER_MODEL)
+        # Fallback based on available API keys
+        if settings.OPENAI_API_KEY:
+            return OpenAIProvider(role_name=role_name, model_name=model_name)
+        elif settings.GEMINI_API_KEY:
+            return GeminiProvider(role_name=role_name, model_name=model_name)
+        else:
+            return OllamaProvider(role_name=role_name, model_name=model_name)

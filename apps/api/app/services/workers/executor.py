@@ -4,7 +4,7 @@ from loguru import logger
 from app.db.base import SessionLocal
 from app.models.schema import Task, TaskStatus, AgentWorker, Evidence, FileChunk, UsageRecord
 from app.schemas.pydantic_contracts import WorkerResponse, Finding, EvidenceItem
-from app.services.ai.ollama_provider import OllamaProvider
+from app.services.ai.factory import get_ai_provider
 from app.services.agents.registry import select_worker_for_capabilities
 from app.services.evidence.validator import validate_evidence_against_document
 from app.services.events.publisher import event_publisher
@@ -28,6 +28,13 @@ def execute_worker_task(task_id: str) -> dict:
             task.assigned_worker_id = worker.id
             db.commit()
 
+        role_name = "analyst"
+        if worker and worker.name:
+            role_name = worker.name.lower()
+
+        # 2. Get Multi-Provider AI Client for Worker Role
+        ai_provider = get_ai_provider(role_name=role_name)
+
         event_publisher.publish_event(
             conversation_id=task.conversation_id,
             event_type="agent_assigned",
@@ -35,33 +42,30 @@ def execute_worker_task(task_id: str) -> dict:
                 "task_id": task.id,
                 "agent_id": worker.id if worker else "worker_1",
                 "agent_name": worker.name if worker else "Worker",
-                "provider": f"Ollama ({worker.model if worker else 'qwen2.5:0.5b'})",
+                "provider": f"{ai_provider.provider} ({ai_provider.model})",
                 "objective": task.objective
             }
         )
 
-        # 2. Gather Document Context
+        # 3. Gather Document Context with Source Metadata
         conversation_files = task.conversation.project.files if task.conversation and task.conversation.project else []
         doc_context = ""
         primary_doc_id = None
+        primary_doc_name = "document"
         
         if conversation_files:
             primary_doc = conversation_files[0]
             primary_doc_id = primary_doc.id
+            primary_doc_name = primary_doc.filename
             chunks = db.query(FileChunk).filter(FileChunk.file_id == primary_doc_id).order_by(FileChunk.page_number).all()
             for chunk in chunks[:15]:
-                doc_context += f"\n--- DOCUMENT PAGE {chunk.page_number} ---\n{chunk.content}\n"
-
-        # 3. Call Ollama Local AI Provider
-        role_name = "analyst"
-        if worker and worker.name:
-            role_name = worker.name.lower()
-        ai_provider = OllamaProvider(role_name=role_name)
+                source_label = chunk.metadata_json.get("source_type", "source") if chunk.metadata_json else "page"
+                doc_context += f"\n--- {primary_doc_name} ({source_label} {chunk.page_number}) ---\n{chunk.content}\n"
 
         prompt = (
             f"DYNAMIC TASK OBJECTIVE:\n{task.objective}\n\n"
-            f"DOCUMENT TEXT EXCERPTS:\n{doc_context[:2000] if doc_context else 'No document attached.'}\n\n"
-            "Analyze this objective specifically against the document text and provide findings and evidence excerpts."
+            f"DOCUMENT TEXT EXCERPTS:\n{doc_context[:3000] if doc_context else 'No document attached.'}\n\n"
+            "Analyze this objective specifically against the document text and provide findings and page evidence quotes."
         )
 
         event_publisher.publish_event(

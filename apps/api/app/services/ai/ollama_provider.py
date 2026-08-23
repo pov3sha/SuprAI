@@ -18,10 +18,9 @@ def verify_configured_models() -> Dict[str, Any]:
     role_models = {}
     
     for r in roles:
-        model = settings.get_role_model(r)
+        model = settings.get_role_model(r, "ollama")
         role_models[r] = model
 
-    # Deduplicate models for query
     unique_models = set(role_models.values())
     
     try:
@@ -32,7 +31,6 @@ def verify_configured_models() -> Dict[str, Any]:
             
             installed_models = [m.get("name") for m in res.json().get("models", [])]
             for model_name in unique_models:
-                # Check exact or family match (e.g. qwen2.5:0.5b vs qwen2.5:0.5b-instruct)
                 if not any(model_name in installed or installed in model_name for installed in installed_models):
                     raise OllamaModelNotFoundError(f"Configured Ollama model '{model_name}' is not installed.")
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
@@ -49,7 +47,8 @@ class OllamaProvider:
     def __init__(self, role_name: str = "manager", model_name: Optional[str] = None, base_url: Optional[str] = None):
         self.base_url = base_url or settings.OLLAMA_BASE_URL
         self.role_name = role_name
-        self.model = model_name or settings.get_role_model(role_name)
+        self.provider = "Ollama"
+        self.model = model_name or settings.get_role_model(role_name, "ollama")
 
     def generate(
         self,

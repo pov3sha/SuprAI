@@ -2,57 +2,60 @@ import time
 import json
 from typing import Optional, Dict, Any
 from loguru import logger
-from openai import OpenAI
-from app.core.config import settings
+import openai
+from app.core.config import settings, ConfigurationError
 from app.services.ai.base import ModelResponse, UsageMetrics
 
 class OpenAIProvider:
-    def __init__(self, model_name: Optional[str] = None):
-        self.model = model_name or settings.OPENAI_MODEL
-        self.api_key = settings.OPENAI_API_KEY
-        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
+    def __init__(self, role_name: str = "manager", model_name: Optional[str] = None):
+        if not settings.OPENAI_API_KEY:
+            raise ConfigurationError("OPENAI_API_KEY is not configured.")
+        
+        self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.role_name = role_name
+        self.provider = "OpenAI"
+        self.model = model_name or settings.get_role_model(role_name, "openai")
 
     def generate(
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
         json_schema: Optional[Dict[str, Any]] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        execution_id: Optional[str] = None
     ) -> ModelResponse:
         start_time = time.time()
 
-        if settings.MOCK_AI_PROVIDERS or not self.client:
-            logger.info(f"Using mock mode for OpenAI ({self.model})")
-            elapsed = int((time.time() - start_time) * 1000)
-            return ModelResponse(
-                content=prompt,
-                usage=UsageMetrics(input_tokens=150, output_tokens=250, estimated_cost=0.002, latency_ms=elapsed),
-                model=self.model,
-                provider="OpenAI"
-            )
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        
+        user_content = prompt
+        if json_schema:
+            user_content += f"\n\nRespond ONLY with a valid JSON object matching schema: {json.dumps(json_schema)}"
+
+        messages.append({"role": "user", "content": user_content})
+
+        kwargs: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+
+        if json_schema or "json" in prompt.lower():
+            kwargs["response_format"] = {"type": "json_object"}
+
+        logger.info(f"OPENAI_REQUEST execution_id={execution_id} agent={self.role_name} model={self.model}")
 
         try:
-            messages = []
-            if system_instruction:
-                messages.append({"role": "system", "content": system_instruction})
-            if json_schema:
-                messages.append({"role": "system", "content": f"Respond strictly in JSON matching this schema: {json.dumps(json_schema)}"})
-            messages.append({"role": "user", "content": prompt})
-
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                response_format={"type": "json_object"} if json_schema else None
-            )
+            response = self.client.chat.completions.create(**kwargs)
+            elapsed = int((time.time() - start_time) * 1000)
 
             text_content = response.choices[0].message.content or ""
-            elapsed = int((time.time() - start_time) * 1000)
-            
-            usage = response.usage
-            in_tokens = usage.prompt_tokens if usage else 0
-            out_tokens = usage.completion_tokens if usage else 0
-            cost = (in_tokens * 0.0000025) + (out_tokens * 0.00001)
+            in_tokens = response.usage.prompt_tokens if response.usage else len(prompt) // 4
+            out_tokens = response.usage.completion_tokens if response.usage else len(text_content) // 4
+
+            logger.info(f"OPENAI_RESPONSE execution_id={execution_id} agent={self.role_name} model={self.model} latency_ms={elapsed} in_tokens={in_tokens} out_tokens={out_tokens}")
 
             parsed_json = None
             if json_schema or "{" in text_content:
@@ -67,17 +70,11 @@ class OpenAIProvider:
             return ModelResponse(
                 content=text_content,
                 raw_json=parsed_json,
-                usage=UsageMetrics(input_tokens=in_tokens, output_tokens=out_tokens, estimated_cost=cost, latency_ms=elapsed),
+                usage=UsageMetrics(input_tokens=in_tokens, output_tokens=out_tokens, estimated_cost=0.0, latency_ms=elapsed),
                 model=self.model,
                 provider="OpenAI"
             )
         except Exception as e:
-            logger.error(f"OpenAI API invocation error: {e}")
             elapsed = int((time.time() - start_time) * 1000)
-            return ModelResponse(
-                content=f"Error calling OpenAI API: {e}",
-                usage=UsageMetrics(latency_ms=elapsed),
-                model=self.model,
-                provider="OpenAI",
-                finish_reason="error"
-            )
+            logger.error(f"OPENAI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={e}")
+            raise RuntimeError(f"OpenAI execution failed for role '{self.role_name}' model '{self.model}': {e}")
