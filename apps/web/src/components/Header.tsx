@@ -4,26 +4,22 @@ import { Cpu, CheckCircle, MinusCircle } from 'lucide-react';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 interface ProviderHealth {
-  openai: string;
   gemini: string;
 }
 
 export const Header: React.FC = () => {
-  const [providers, setProviders] = useState<ProviderHealth>({
-    openai: 'checking',
-    gemini: 'checking',
-  });
+  const [geminiStatus, setGeminiStatus] = useState<string>('checking');
 
   useEffect(() => {
     fetch(`${API_BASE}/health`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.providers) {
-          setProviders(data.providers);
+        if (data.providers && data.providers.gemini) {
+          setGeminiStatus(data.providers.gemini);
         }
       })
       .catch(() => {
-        setProviders({ openai: 'missing', gemini: 'missing' });
+        setGeminiStatus('missing');
       });
   }, []);
 
@@ -36,40 +32,25 @@ export const Header: React.FC = () => {
         </div>
         <div>
           <h1 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-            SuprAI <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1B2433] text-[#94A3B8] border border-[#263347]">Multi-Model Engine</span>
+            SuprAI <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1B2433] text-[#94A3B8] border border-[#263347]">Gemini Engine</span>
           </h1>
-          <p className="text-[10px] text-[#94A3B8]">Autonomous AI Work Organization (OpenAI + Gemini)</p>
+          <p className="text-[10px] text-[#94A3B8]">Autonomous AI Work Organization (Google Gemini 1.5 Flash)</p>
         </div>
       </div>
 
-      {/* Provider Status Indicators */}
+      {/* Gemini Status Indicator */}
       <div className="flex items-center gap-3 text-xs font-medium">
-        {/* OpenAI Status */}
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] ${
-          providers.openai === 'configured'
+        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border text-xs ${
+          geminiStatus === 'configured'
             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
             : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
         }`}>
-          {providers.openai === 'configured' ? (
-            <CheckCircle className="w-3 h-3 text-emerald-400" />
+          {geminiStatus === 'configured' ? (
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
           ) : (
-            <MinusCircle className="w-3 h-3 text-slate-500" />
+            <MinusCircle className="w-3.5 h-3.5 text-slate-500" />
           )}
-          <span>OpenAI (GPT) {providers.openai === 'configured' ? 'Connected' : 'Not Configured'}</span>
-        </div>
-
-        {/* Gemini Status */}
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] ${
-          providers.gemini === 'configured'
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
-        }`}>
-          {providers.gemini === 'configured' ? (
-            <CheckCircle className="w-3 h-3 text-emerald-400" />
-          ) : (
-            <MinusCircle className="w-3 h-3 text-slate-500" />
-          )}
-          <span>Gemini {providers.gemini === 'configured' ? 'Connected' : 'Not Configured'}</span>
+          <span>Gemini 1.5 Flash {geminiStatus === 'configured' ? 'Connected' : 'Not Configured'}</span>
         </div>
       </div>
     </header>

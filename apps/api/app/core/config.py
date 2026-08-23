@@ -22,12 +22,12 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
     
     # Default Provider Handoff
-    AI_DEFAULT_PROVIDER: str = os.getenv("AI_DEFAULT_PROVIDER", "openai")
+    AI_DEFAULT_PROVIDER: str = os.getenv("AI_DEFAULT_PROVIDER", "gemini")
     
-    # Role Provider Routing
-    MANAGER_PROVIDER: str = os.getenv("MANAGER_PROVIDER", "openai")
+    # Role Provider Routing (All Gemini)
+    MANAGER_PROVIDER: str = os.getenv("MANAGER_PROVIDER", "gemini")
     CONSULTANT_PROVIDER: str = os.getenv("CONSULTANT_PROVIDER", "gemini")
-    ANALYST_PROVIDER: str = os.getenv("ANALYST_PROVIDER", "openai")
+    ANALYST_PROVIDER: str = os.getenv("ANALYST_PROVIDER", "gemini")
     RESEARCHER_PROVIDER: str = os.getenv("RESEARCHER_PROVIDER", "gemini")
     
     # OpenAI Configurable Models
@@ -68,32 +68,19 @@ class Settings(BaseSettings):
         elif "researcher" in r:
             provider = self.RESEARCHER_PROVIDER
 
-        return (provider or self.AI_DEFAULT_PROVIDER or "openai").lower()
+        return (provider or self.AI_DEFAULT_PROVIDER or "gemini").lower()
 
     def get_role_model(self, role_name: str, provider_name: str) -> str:
         r = role_name.lower()
         p = provider_name.lower()
 
-        if "openai" in p:
-            if "manager" in r: return self.OPENAI_MANAGER_MODEL or "gpt-4o-mini"
-            if "consultant" in r: return self.OPENAI_CONSULTANT_MODEL or "gpt-4o-mini"
-            if "analyst" in r: return self.OPENAI_ANALYST_MODEL or "gpt-4o-mini"
-            if "researcher" in r: return self.OPENAI_RESEARCHER_MODEL or "gpt-4o-mini"
-            return "gpt-4o-mini"
-        elif "gemini" in p:
+        if "gemini" in p or True:
             if "manager" in r: return self.GEMINI_MANAGER_MODEL or "gemini-1.5-flash"
             if "consultant" in r: return self.GEMINI_CONSULTANT_MODEL or "gemini-1.5-flash"
             if "analyst" in r: return self.GEMINI_ANALYST_MODEL or "gemini-1.5-flash"
             if "researcher" in r: return self.GEMINI_RESEARCHER_MODEL or "gemini-1.5-flash"
             return "gemini-1.5-flash"
-        elif "ollama" in p:
-            role_model = None
-            if "manager" in r: role_model = self.OLLAMA_MANAGER_MODEL
-            elif "consultant" in r: role_model = self.OLLAMA_CONSULTANT_MODEL
-            elif "analyst" in r: role_model = self.OLLAMA_ANALYST_MODEL
-            elif "researcher" in r: role_model = self.OLLAMA_RESEARCHER_MODEL
-            return (role_model or self.OLLAMA_DEFAULT_MODEL or "qwen2.5:0.5b").strip()
 
-        return "gpt-4o-mini"
+        return "gemini-1.5-flash"
 
 settings = Settings()
