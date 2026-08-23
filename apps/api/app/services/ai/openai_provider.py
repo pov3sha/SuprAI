@@ -77,4 +77,14 @@ class OpenAIProvider:
         except Exception as e:
             elapsed = int((time.time() - start_time) * 1000)
             logger.error(f"OPENAI_ERROR execution_id={execution_id} agent={self.role_name} model={self.model} error={e}")
+            if "401" in str(e) or "invalid_api_key" in str(e):
+                logger.warning(f"OpenAI API key invalid (401), falling back to local Ollama provider for role '{self.role_name}'")
+                from app.services.ai.ollama_provider import OllamaProvider
+                return OllamaProvider(role_name=self.role_name).generate(
+                    prompt=prompt,
+                    system_instruction=system_instruction,
+                    json_schema=json_schema,
+                    temperature=temperature,
+                    execution_id=execution_id
+                )
             raise RuntimeError(f"OpenAI execution failed for role '{self.role_name}' model '{self.model}': {e}")

@@ -5,7 +5,8 @@ from app.models.schema import AgentWorker
 from app.core.config import settings
 
 def get_role_model(role_name: str) -> str:
-    return settings.get_role_model(role_name)
+    provider = settings.get_role_provider(role_name)
+    return settings.get_role_model(role_name, provider)
 
 ORGANIZATION_ROLES = [
     {
