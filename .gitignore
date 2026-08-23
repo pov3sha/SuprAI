@@ -1,0 +1,49 @@
+# Environment variables
+.env
+.env.local
+.env.production
+*.env
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing & Coverage
+coverage/
+.pytest_cache/
+*.lprof
+
+# Next.js Build Outputs
+.next/
+out/
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local volumes & temp storage
+tmp/
+/tmp/
+.ollama/
+postgres_data/
+redis_data/
+minio_data/

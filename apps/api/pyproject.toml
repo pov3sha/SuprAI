@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "suprai-backend"
+version = "0.1.0"
+description = "SuprAI Backend Engine"
+authors = ["SuprAI Team <engineering@suprai.ai>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.111.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
+sqlalchemy = "^2.0.30"
+psycopg2-binary = "^2.9.9"
+pydantic = "^2.7.0"
+pydantic-settings = "^2.2.1"
+minio = "^7.2.7"
+redis = "^5.0.4"
+httpx = "^0.27.0"
+pypdf = "^4.2.0"
+python-multipart = "^0.0.9"
+sse-starlette = "^2.1.0"
+setuptools = "^70.0.0"
+loguru = "^0.7.2"
+opentelemetry-api = "^1.24.0"
+opentelemetry-sdk = "^1.24.0"
+opentelemetry-instrumentation-fastapi = "^0.45b0"
+anthropic = "^0.28.0"
+openai = "^1.30.0"
+google-generativeai = "^0.5.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+pytest-asyncio = "^0.23.7"
+ruff = "^0.4.4"
+mypy = "^1.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
