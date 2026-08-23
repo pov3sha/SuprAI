@@ -74,14 +74,26 @@ class FileRecord(Base):
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
     filename = Column(String(255), nullable=False)
     mime_type = Column(String(100), nullable=False)
-    size = Column(Integer, nullable=False)
-    storage_key = Column(String(255), nullable=False)
+    size_bytes = Column(Integer, nullable=False, default=0)
+    storage_path = Column(String(255), nullable=False)
     page_count = Column(Integer, default=0)
-    processing_status = Column(String(50), default="COMPLETED")
+    status = Column(String(50), default="COMPLETED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     project = relationship("Project", back_populates="files")
     chunks = relationship("FileChunk", back_populates="file_record", cascade="all, delete-orphan")
+
+    @property
+    def size(self):
+        return self.size_bytes
+
+    @property
+    def storage_key(self):
+        return self.storage_path
+
+    @property
+    def processing_status(self):
+        return self.status
 
 class FileChunk(Base):
     __tablename__ = "file_chunks"
@@ -91,6 +103,7 @@ class FileChunk(Base):
     page_number = Column(Integer, nullable=False)
     section_title = Column(String(255), nullable=True)
     content = Column(Text, nullable=False)
+    metadata_json = Column(JSON, nullable=True)
 
     file_record = relationship("FileRecord", back_populates="chunks")
 
@@ -99,7 +112,7 @@ class AgentWorker(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), nullable=False)
-    provider = Column(String(50), nullable=False)  # 'OpenAI', 'Gemini', 'Anthropic'
+    provider = Column(String(50), nullable=False)  # 'OpenAI', 'Gemini', 'Ollama'
     model = Column(String(100), nullable=False)
     capabilities = Column(JSON, nullable=False)  # list of str e.g. ["financial_analysis", "reasoning"]
     status = Column(String(50), default="AVAILABLE")
