@@ -23,6 +23,7 @@ import {
   fetchConversationHistory,
 } from '@/lib/api';
 import { useSSE } from '@/lib/useSSE';
+import { playPingSound } from '@/lib/sound';
 import { Project, FileRecord, Message, Task, Evidence } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -115,7 +116,6 @@ export default function DashboardPage() {
 
   const handleCreateProject = async (name: string, description?: string) => {
     try {
-      // Clear current workspace & timeline for new project creation
       setMessages([]);
       setTasks([]);
       setEvidenceList([]);
@@ -261,6 +261,9 @@ export default function DashboardPage() {
     } else if (latestEvent.event_type === 'execution_completed' || latestEvent.event_type === 'execution_failed') {
       setIsProcessing(false);
       loadHistory(conversationId);
+      if (latestEvent.event_type === 'execution_completed') {
+        playPingSound();
+      }
     }
   }, [events, conversationId]);
 
