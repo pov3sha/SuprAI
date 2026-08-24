@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { ProjectSidebar } from '@/components/ProjectSidebar';
 import { ChatWorkspace } from '@/components/ChatWorkspace';
-import { AIOrgCommandCenter } from '@/components/AIOrgCommandCenter';
+import { PipelineGraph } from '@/components/PipelineGraph';
+import { ResizableLayout } from '@/components/ResizableLayout';
 import { LiveFeed } from '@/components/LiveFeed';
 import { EvidenceDrawer } from '@/components/EvidenceDrawer';
 import { ProjectsView } from '@/components/views/ProjectsView';
@@ -248,31 +249,30 @@ export default function DashboardPage() {
   const activeDocName = files.length > 0 ? files[0].filename : undefined;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#202629] text-[#F3F4F6]">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#111111] text-[#FFFFFF]">
       <Header />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <ProjectSidebar
-          projects={projects}
-          activeProject={activeProject}
-          onSelectProject={selectProject}
-          onCreateProject={handleCreateProject}
-          onDeleteProject={handleDeleteProject}
-          onClearAll={handleClearAll}
-          onFileUpload={handleFileUpload}
-          files={files}
-          isUploading={isUploading}
-          activeNav={activeNav}
-          setActiveNav={setActiveNav}
-          forceOpenModal={forceOpenModal}
-          onCloseModal={() => setForceOpenModal(false)}
-        />
-
-        {/* Center Main Execution Command Center */}
-        {activeNav === 'dashboard' && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-            <AIOrgCommandCenter
+      {activeNav === 'dashboard' ? (
+        <ResizableLayout
+          leftSidebarComponent={
+            <ProjectSidebar
+              projects={projects}
+              activeProject={activeProject}
+              onSelectProject={selectProject}
+              onCreateProject={handleCreateProject}
+              onDeleteProject={handleDeleteProject}
+              onClearAll={handleClearAll}
+              onFileUpload={handleFileUpload}
+              files={files}
+              isUploading={isUploading}
+              activeNav={activeNav}
+              setActiveNav={setActiveNav}
+              forceOpenModal={forceOpenModal}
+              onCloseModal={() => setForceOpenModal(false)}
+            />
+          }
+          topComponent={
+            <PipelineGraph
               tasks={tasks}
               isProcessing={isProcessing}
               events={events}
@@ -280,6 +280,8 @@ export default function DashboardPage() {
               activeDocumentName={activeDocName}
               onSelectEvidence={(ev) => setSelectedEvidence(ev)}
             />
+          }
+          bottomComponent={
             <ChatWorkspace
               activeProject={activeProject}
               messages={messages}
@@ -290,42 +292,60 @@ export default function DashboardPage() {
               onOpenCreateProject={() => setForceOpenModal(true)}
               onClearWorkspace={handleClearWorkspaceMessages}
             />
-          </div>
-        )}
-
-        {activeNav === 'projects' && (
-          <ProjectsView
+          }
+          sidebarComponent={
+            <div className="p-3 h-full overflow-y-auto bg-[#111111]">
+              <LiveFeed events={events} isConnected={isConnected} />
+            </div>
+          }
+        />
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          <ProjectSidebar
             projects={projects}
             activeProject={activeProject}
-            onSelectProject={(proj) => {
-              selectProject(proj);
-              setActiveNav('dashboard');
-            }}
-            onCreateProjectClick={() => setForceOpenModal(true)}
+            onSelectProject={selectProject}
+            onCreateProject={handleCreateProject}
             onDeleteProject={handleDeleteProject}
             onClearAll={handleClearAll}
-          />
-        )}
-
-        {activeNav === 'organization' && <OrganizationView />}
-
-        {activeNav === 'files' && (
-          <FilesView
-            activeProject={activeProject}
+            onFileUpload={handleFileUpload}
             files={files}
             isUploading={isUploading}
-            onFileUpload={handleFileUpload}
-            onDeleteFile={handleDeleteFile}
+            activeNav={activeNav}
+            setActiveNav={setActiveNav}
+            forceOpenModal={forceOpenModal}
+            onCloseModal={() => setForceOpenModal(false)}
           />
-        )}
 
-        {activeNav === 'activity' && <ActivityView events={events} />}
+          {activeNav === 'projects' && (
+            <ProjectsView
+              projects={projects}
+              activeProject={activeProject}
+              onSelectProject={(proj) => {
+                selectProject(proj);
+                setActiveNav('dashboard');
+              }}
+              onCreateProjectClick={() => setForceOpenModal(true)}
+              onDeleteProject={handleDeleteProject}
+              onClearAll={handleClearAll}
+            />
+          )}
 
-        {/* Right Execution Timeline Panel */}
-        <div className="w-80 border-l border-[#5E666D] bg-[#202629] p-4 flex flex-col h-[calc(100vh-3.5rem)] shrink-0 overflow-y-auto">
-          <LiveFeed events={events} isConnected={isConnected} />
+          {activeNav === 'organization' && <OrganizationView />}
+
+          {activeNav === 'files' && (
+            <FilesView
+              activeProject={activeProject}
+              files={files}
+              isUploading={isUploading}
+              onFileUpload={handleFileUpload}
+              onDeleteFile={handleDeleteFile}
+            />
+          )}
+
+          {activeNav === 'activity' && <ActivityView events={events} />}
         </div>
-      </div>
+      )}
 
       {/* Slide-over Evidence Drawer */}
       <EvidenceDrawer evidence={selectedEvidence} onClose={() => setSelectedEvidence(null)} />

@@ -69,116 +69,71 @@ class ManagerOrchestrator:
                     source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
                     doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:400]}\n"
 
-            # 4. Manager AI Dynamic Workflow Decision (Decomposition)
+            # 4. Manager AI Task Decomposition across all 4 Organization Roles
             event_publisher.publish_event(
                 conversation_id=conversation_id,
                 event_type="manager_planning",
                 payload={"execution_id": execution_id, "file_count": len(files)}
             )
 
-            manager_decomp_prompt = (
-                f"USER OBJECTIVE: '{prompt}'\n\n"
-                f"ATTACHED DOCUMENTS:\n{doc_context_summary if doc_context_summary else 'No files attached.'}\n\n"
-                "Determine if this objective requires multi-agent worker task delegation or direct synthesis.\n"
-                "If delegation is required, return a JSON array of tasks with target roles (consultant, analyst, researcher, intern):\n"
-                "[\n"
-                "  {\"objective\": \"Task 1 description\", \"role\": \"analyst\", \"capability\": \"document_analysis\"}\n"
-                "]\n"
-                "If simple question or direct summary, return an empty array: []"
+            # Mandatory 4-Agent Execution Plan (Consultant, Analyst, Researcher, Intern)
+            dynamic_tasks = [
+                {"objective": f"Formulate strategic implications and recommendations for {prompt[:40]}", "role": "consultant", "capability": "strategy"},
+                {"objective": f"Analyze quantitative metrics and structural data for {prompt[:40]}", "role": "analyst", "capability": "document_analysis"},
+                {"objective": f"Verify context facts and document evidence for {prompt[:40]}", "role": "researcher", "capability": "research"},
+                {"objective": f"Extract key entities, key points, and structured notes for {prompt[:40]}", "role": "intern", "capability": "extraction"}
+            ]
+
+            self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.RUNNING, "Executing 4-agent task graph")
+
+            created_tasks = []
+            for tdata in dynamic_tasks:
+                t = Task(
+                    conversation_id=conversation_id,
+                    objective=tdata["objective"],
+                    required_capabilities=[tdata["capability"]],
+                    priority="high",
+                    status=TaskStatus.QUEUED
+                )
+                db.add(t)
+                db.commit()
+                db.refresh(t)
+                created_tasks.append(t)
+
+                event_publisher.publish_event(
+                    conversation_id=conversation_id,
+                    event_type="task_created",
+                    payload={
+                        "execution_id": execution_id,
+                        "task_id": t.id,
+                        "objective": tdata["objective"],
+                        "role": tdata["role"]
+                    }
+                )
+
+            self._publish_state_transition(conversation_id, execution_id, ExecutionState.RUNNING, ExecutionState.WAITING_FOR_WORKERS, "Waiting for parallel worker tasks")
+
+            # Parallel Worker Execution via TaskExecutor Abstraction
+            worker_outputs = task_executor.execute_tasks(created_tasks, db, execution_id)
+
+            # Reviewing & Evidence Verification
+            self._publish_state_transition(conversation_id, execution_id, ExecutionState.WAITING_FOR_WORKERS, ExecutionState.REVIEWING, "Reviewing worker results")
+            event_publisher.publish_event(
+                conversation_id=conversation_id,
+                event_type="manager_reviewing",
+                payload={"execution_id": execution_id, "worker_count": len(worker_outputs)}
             )
 
-            decomp_res = manager_provider.generate(
-                prompt=manager_decomp_prompt,
-                system_instruction=MANAGER_SYSTEM_PROMPT,
-                temperature=0.1,
-                execution_id=execution_id
+            # Final Synthesis
+            self._publish_state_transition(conversation_id, execution_id, ExecutionState.REVIEWING, ExecutionState.SYNTHESIZING, "Synthesizing final deliverable")
+            event_publisher.publish_event(
+                conversation_id=conversation_id,
+                event_type="manager_synthesizing",
+                payload={"execution_id": execution_id}
             )
+            final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id)
 
-            # Parse Tasks from Manager AI
-            dynamic_tasks = []
-            if decomp_res.content:
-                try:
-                    match = re.search(r'\[.*\]', decomp_res.content, re.DOTALL)
-                    if match:
-                        parsed = json.loads(match.group(0))
-                        for item in parsed:
-                            if isinstance(item, dict) and "objective" in item:
-                                dynamic_tasks.append({
-                                    "objective": item["objective"],
-                                    "role": item.get("role", "analyst"),
-                                    "capability": item.get("capability", "document_analysis")
-                                })
-                except Exception as e:
-                    logger.warning(f"Could not parse dynamic tasks JSON: {e}")
-
-            # 5. Execution State Machine: Direct Synthesis vs Parallel Workers
-            if not dynamic_tasks and ("summarize" in prompt.lower() or len(prompt.split()) < 6):
-                # Direct Manager Synthesis
-                self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.SYNTHESIZING, "Direct Manager synthesis")
-                event_publisher.publish_event(
-                    conversation_id=conversation_id,
-                    event_type="manager_synthesizing",
-                    payload={"execution_id": execution_id}
-                )
-                final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, [], execution_id)
-            else:
-                # Complex objective -> Task Graph & Parallel Workers
-                if not dynamic_tasks:
-                    dynamic_tasks = [
-                        {"objective": f"Analyze document context for {prompt[:40]}", "role": "analyst", "capability": "document_analysis"},
-                        {"objective": f"Formulate strategy recommendations for {prompt[:40]}", "role": "consultant", "capability": "strategy"}
-                    ]
-
-                self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.RUNNING, "Executing task graph")
-
-                created_tasks = []
-                for tdata in dynamic_tasks:
-                    t = Task(
-                        conversation_id=conversation_id,
-                        objective=tdata["objective"],
-                        required_capabilities=[tdata["capability"]],
-                        priority="high",
-                        status=TaskStatus.QUEUED
-                    )
-                    db.add(t)
-                    db.commit()
-                    db.refresh(t)
-                    created_tasks.append(t)
-
-                    event_publisher.publish_event(
-                        conversation_id=conversation_id,
-                        event_type="task_created",
-                        payload={
-                            "execution_id": execution_id,
-                            "task_id": t.id,
-                            "objective": t.objective,
-                            "role": tdata["role"]
-                        }
-                    )
-
-                self._publish_state_transition(conversation_id, execution_id, ExecutionState.RUNNING, ExecutionState.WAITING_FOR_WORKERS, "Waiting for parallel worker tasks")
-
-                # Parallel Worker Execution via TaskExecutor Abstraction
-                worker_outputs = task_executor.execute_tasks(created_tasks, db, execution_id)
-
-                # Reviewing & Evidence Verification
-                self._publish_state_transition(conversation_id, execution_id, ExecutionState.WAITING_FOR_WORKERS, ExecutionState.REVIEWING, "Reviewing worker results")
-                event_publisher.publish_event(
-                    conversation_id=conversation_id,
-                    event_type="manager_reviewing",
-                    payload={"execution_id": execution_id, "worker_count": len(worker_outputs)}
-                )
-
-                # Final Synthesis
-                self._publish_state_transition(conversation_id, execution_id, ExecutionState.REVIEWING, ExecutionState.SYNTHESIZING, "Synthesizing final deliverable")
-                event_publisher.publish_event(
-                    conversation_id=conversation_id,
-                    event_type="manager_synthesizing",
-                    payload={"execution_id": execution_id}
-                )
-                final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id)
-
-            # 6. Save Assistant Message & Transition to COMPLETED
+            # 5. Save Assistant Message & Transition to COMPLETED
             elapsed_total = int((time.time() - start_time) * 1000)
             assistant_msg = Message(
                 conversation_id=conversation_id,

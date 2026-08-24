@@ -82,7 +82,7 @@ class OllamaProvider:
         logger.info(f"OLLAMA_REQUEST execution_id={execution_id} agent={self.role_name} model={self.model} url={self.base_url}/api/generate")
 
         try:
-            with httpx.Client(timeout=180.0) as client:
+            with httpx.Client(timeout=300.0) as client:
                 resp = client.post(f"{self.base_url}/api/generate", json=payload)
                 resp.raise_for_status()
                 data = resp.json()

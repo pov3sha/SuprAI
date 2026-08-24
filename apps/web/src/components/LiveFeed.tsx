@@ -22,6 +22,12 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
         return `Assigned ${event.payload?.agent_name || 'Agent'} to subtask`;
       case 'agent_started':
         return `${event.payload?.agent_name || 'Agent'} started processing`;
+      case 'agent_question':
+        return `${event.payload?.agent_name || 'Agent'} → Manager: "${event.payload?.question || 'Clarification request'}"`;
+      case 'manager_clarification':
+        return `Manager → ${event.payload?.target || 'Agent'}: "${event.payload?.response || 'Strategic guidance'}"`;
+      case 'agent_acknowledged':
+        return `${event.payload?.agent_name || 'Agent'}: Clarification received`;
       case 'document_reading':
         return `${event.payload?.agent_name || 'Agent'} reading ${event.payload?.filename || 'document'} (Page ${event.payload?.page || 1})`;
       case 'evidence_created':
@@ -42,32 +48,32 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
   };
 
   return (
-    <div className="w-full bg-[#2D3439] border border-[#5E666D] rounded-xl overflow-hidden flex flex-col text-xs text-white">
+    <div className="w-full bg-[#333333] border border-[#555555] rounded overflow-hidden flex flex-col text-xs text-[#FFFFFF] font-sans">
       {/* Header */}
-      <div className="px-4 py-3 bg-[#202629] border-b border-[#5E666D] flex items-center justify-between">
+      <div className="px-3 py-2 bg-[#111111] border-b border-[#555555] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#6366F1]" />
-          <h4 className="font-bold text-[#F3F4F6] tracking-wide">Real-Time Execution Timeline</h4>
+          <Activity className="w-4 h-4 text-[#999999]" />
+          <h4 className="font-bold text-[#FFFFFF] tracking-wide text-xs">Execution Lifecycle Stream</h4>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-            className="flex items-center gap-1 text-[11px] text-[#A9A8AD] hover:text-white transition font-mono px-2 py-0.5 rounded bg-[#2D3439] border border-[#5E666D]"
+            className="flex items-center gap-1 text-[10px] text-[#999999] hover:text-[#FFFFFF] transition font-mono px-2 py-0.5 rounded bg-[#333333] border border-[#555555]"
           >
-            <Terminal className="w-3 h-3 text-[#6366F1]" />
-            {showTechnicalDetails ? 'Hide JSON Events' : 'Show JSON Events'}
+            <Terminal className="w-3 h-3 text-[#999999]" />
+            {showTechnicalDetails ? 'Hide JSON' : 'JSON'}
             {showTechnicalDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#7FAF91]' : 'bg-[#A47A7A]'}`} />
         </div>
       </div>
 
       {/* Timeline List */}
-      <div className="p-4 max-h-72 overflow-y-auto space-y-3 font-sans scrollbar-thin">
+      <div className="p-3 max-h-[calc(100vh-10rem)] overflow-y-auto space-y-2.5 scrollbar-thin">
         {events.length === 0 ? (
-          <div className="py-6 text-center text-[#848589] flex flex-col items-center gap-2">
-            <Clock className="w-6 h-6 stroke-1 text-[#5E666D]" />
-            <span>Awaiting execution stream events...</span>
+          <div className="py-6 text-center text-[#777777] flex flex-col items-center gap-2">
+            <Clock className="w-5 h-5 stroke-1 text-[#555555]" />
+            <span className="text-[11px]">Awaiting execution lifecycle events...</span>
           </div>
         ) : (
           events.map((ev, index) => {
@@ -75,30 +81,30 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
             const isFailed = ev.event_type === 'execution_failed' || ev.event_type === 'agent_failed';
 
             return (
-              <div key={index} className="flex items-start gap-3 text-[11px]">
+              <div key={index} className="flex items-start gap-2 text-[11px]">
                 <div className="mt-0.5 shrink-0">
                   {isCompleted ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    <CheckCircle className="w-3.5 h-3.5 text-[#7FAF91]" />
                   ) : isFailed ? (
-                    <AlertCircle className="w-4 h-4 text-rose-400" />
+                    <AlertCircle className="w-3.5 h-3.5 text-[#A47A7A]" />
                   ) : (
-                    <span className="w-4 h-4 rounded-full border border-[#6366F1] bg-[#6366F1]/20 flex items-center justify-center text-[9px] text-[#6366F1] font-mono">
+                    <span className="w-3.5 h-3.5 rounded-full border border-[#999999] bg-[#111111] flex items-center justify-center text-[8px] text-[#999999] font-mono">
                       ●
                     </span>
                   )}
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between text-[#F3F4F6]">
-                    <span className="font-semibold">{getEventTitle(ev)}</span>
-                    <span className="text-[9.5px] font-mono text-[#848589]">
+                  <div className="flex items-center justify-between text-[#FFFFFF]">
+                    <span className="font-semibold text-[11px] leading-tight">{getEventTitle(ev)}</span>
+                    <span className="text-[9px] font-mono text-[#777777] shrink-0 ml-1">
                       {new Date((ev.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}
                     </span>
                   </div>
 
-                  {/* Technical JSON Payload Details */}
+                  {/* Technical JSON Details */}
                   {showTechnicalDetails && (
-                    <pre className="p-2 rounded bg-[#202629] border border-[#5E666D] font-mono text-[9.5px] text-[#A9A8AD] overflow-x-auto">
+                    <pre className="p-2 rounded bg-[#111111] border border-[#555555] font-mono text-[9px] text-[#999999] overflow-x-auto">
                       {JSON.stringify(ev.payload, null, 2)}
                     </pre>
                   )}

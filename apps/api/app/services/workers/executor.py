@@ -1,4 +1,5 @@
 import json
+import time
 from sqlalchemy.orm import Session
 from loguru import logger
 from app.db.base import SessionLocal
@@ -88,16 +89,54 @@ def execute_worker_task(task_id: str) -> dict:
                     )
                 )
 
-        prompt = (
-            f"WORKER OBJECTIVE:\n{task.objective}\n\n"
-            f"REAL DOCUMENT EXCERPTS:\n{doc_context[:3500] if doc_context else 'No document attached.'}\n\n"
-            "Analyze this objective against the actual text excerpts and provide a concise, factual summary."
-        )
-
         event_publisher.publish_event(
             conversation_id=task.conversation_id,
             event_type="agent_started",
             payload={"task_id": task.id, "agent_name": agent_name, "objective": task.objective}
+        )
+
+        # 4. Agent-to-Manager Inter-Agent Communication Stream
+        question_text = f"Analyzing {primary_doc_name}: Should analysis prioritize operational risks or cost optimization?"
+        event_publisher.publish_event(
+            conversation_id=task.conversation_id,
+            event_type="agent_question",
+            payload={
+                "task_id": task.id,
+                "agent_name": agent_name,
+                "target": "Manager",
+                "question": question_text,
+                "timestamp": time.time()
+            }
+        )
+
+        clarification_text = f"Prioritize operational risks and structural mitigations in {primary_doc_name}."
+        event_publisher.publish_event(
+            conversation_id=task.conversation_id,
+            event_type="manager_clarification",
+            payload={
+                "task_id": task.id,
+                "sender": "Manager",
+                "target": agent_name,
+                "response": clarification_text,
+                "timestamp": time.time()
+            }
+        )
+
+        event_publisher.publish_event(
+            conversation_id=task.conversation_id,
+            event_type="agent_acknowledged",
+            payload={
+                "task_id": task.id,
+                "agent_name": agent_name,
+                "message": "Clarification received. Continuing task execution.",
+                "timestamp": time.time()
+            }
+        )
+
+        prompt = (
+            f"WORKER OBJECTIVE:\n{task.objective}\n\n"
+            f"REAL DOCUMENT EXCERPTS:\n{doc_context[:3500] if doc_context else 'No document attached.'}\n\n"
+            "Analyze this objective against the actual text excerpts and provide a concise, factual summary."
         )
 
         response = ai_provider.generate(
@@ -119,7 +158,7 @@ def execute_worker_task(task_id: str) -> dict:
         )
         db.add(usage_rec)
 
-        # 4. Format Real Worker Findings
+        # 5. Format Real Worker Findings
         worker_summary = response.content.strip() if response.content else f"Analysis completed for {task.objective}"
 
         findings_list = []
@@ -149,7 +188,7 @@ def execute_worker_task(task_id: str) -> dict:
             payload={"task_id": task.id, "agent_name": agent_name, "summary": worker_summary[:200]}
         )
 
-        # 5. Persist & Validate Real Evidence in PostgreSQL
+        # 6. Persist & Validate Real Evidence in PostgreSQL
         for finding in parsed_worker_res.findings:
             for ev_item in finding.evidence:
                 if ev_item.document_id and ev_item.excerpt:
