@@ -39,6 +39,10 @@ export default function DashboardPage() {
   const [activeNav, setActiveNav] = useState('dashboard');
   const [forceOpenModal, setForceOpenModal] = useState(false);
 
+  // Sidebar collapse states
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -267,6 +271,8 @@ export default function DashboardPage() {
           setActiveNav={setActiveNav}
           forceOpenModal={forceOpenModal}
           onCloseModal={() => setForceOpenModal(false)}
+          isCollapsed={isLeftCollapsed}
+          onToggleCollapse={() => setIsLeftCollapsed(!isLeftCollapsed)}
         />
 
         {activeNav === 'dashboard' ? (
@@ -298,7 +304,12 @@ export default function DashboardPage() {
             </main>
 
             {/* Right Execution Timeline Sidebar */}
-            <LiveFeed events={events} isConnected={isConnected} />
+            <LiveFeed
+              events={events}
+              isConnected={isConnected}
+              isCollapsed={isRightCollapsed}
+              onToggleCollapse={() => setIsRightCollapsed(!isRightCollapsed)}
+            />
           </>
         ) : (
           <div className="flex-1 overflow-y-auto p-4">

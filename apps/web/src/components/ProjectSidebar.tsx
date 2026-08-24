@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Folder, Users, FileText, Activity, Plus, FileCheck, X, Trash2, RefreshCw, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Folder, Users, FileText, Activity, Plus, FileCheck, X, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Project, FileRecord } from '../lib/types';
 
 interface ProjectSidebarProps {
@@ -16,6 +16,8 @@ interface ProjectSidebarProps {
   setActiveNav: (nav: string) => void;
   forceOpenModal?: boolean;
   onCloseModal?: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
@@ -32,6 +34,8 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   setActiveNav,
   forceOpenModal = false,
   onCloseModal,
+  isCollapsed,
+  onToggleCollapse,
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
@@ -74,10 +78,14 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 border-r border-[#313A40] bg-[#171C20] flex flex-col h-[calc(100vh-3.5rem)] text-[#F3F4F6] select-none shrink-0 font-sans">
+    <aside
+      className={`${
+        isCollapsed ? 'w-16' : 'w-64'
+      } border-r border-[#313A40] bg-[#171C20] flex flex-col h-[calc(100vh-3.5rem)] text-[#F3F4F6] select-none shrink-0 font-sans transition-all duration-300`}
+    >
       {/* Navigation section */}
-      <div className="p-4 space-y-1 border-b border-[#313A40]">
-        <div className="text-[10px] font-bold text-[#6B7780] uppercase tracking-wider mb-2">WORKSPACE</div>
+      <div className="p-3 space-y-1 border-b border-[#313A40]">
+        {!isCollapsed && <div className="text-[10px] font-bold text-[#6B7780] uppercase tracking-wider mb-2 px-1">WORKSPACE</div>}
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeNav === item.id;
@@ -85,102 +93,119 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveNav(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer ${
+              title={isCollapsed ? item.label : undefined}
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2'
+              } rounded-xl text-xs font-medium transition cursor-pointer ${
                 isActive ? 'bg-[#242B30] text-[#F3F4F6] border border-[#313A40] shadow-sm' : 'text-[#9DA8B0] hover:bg-[#1C2226] hover:text-[#F3F4F6]'
               }`}
             >
-              <Icon className="w-4 h-4 text-[#9DA8B0]" />
-              <span>{item.label}</span>
+              <Icon className="w-4 h-4 text-[#9DA8B0] shrink-0" />
+              {!isCollapsed && <span>{item.label}</span>}
             </button>
           );
         })}
       </div>
 
       {/* Projects section */}
-      <div className="flex-1 flex flex-col min-h-0 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-bold text-[#6B7780] uppercase tracking-wider">PROJECTS ({projects.length})</span>
-          <div className="flex items-center gap-1">
-            {projects.length > 0 && (
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to clear all projects?')) {
-                    onClearAll();
-                  }
-                }}
-                className="p-1 rounded text-[#A47A7A] hover:bg-[rgba(143,102,102,0.1)] transition cursor-pointer"
-                title="Clear All Projects"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
+      <div className="flex-1 flex flex-col min-h-0 p-3">
+        {!isCollapsed ? (
+          <>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-[10px] font-bold text-[#6B7780] uppercase tracking-wider">PROJECTS ({projects.length})</span>
+              <div className="flex items-center gap-1">
+                {projects.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear all projects?')) {
+                        onClearAll();
+                      }
+                    }}
+                    className="p-1 rounded text-[#A47A7A] hover:bg-[rgba(143,102,102,0.1)] transition cursor-pointer"
+                    title="Clear All Projects"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="p-1 rounded text-[#9DA8B0] hover:text-[#F3F4F6] hover:bg-[#242B30] transition cursor-pointer"
+                  title="Create Project"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {projects.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-[#6B7780] text-xs">
+                <p className="mb-2 text-[11px]">No projects active.</p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-[#242B30] border border-[#313A40] text-[#F3F4F6] font-bold hover:bg-[#313A40] transition text-xs cursor-pointer"
+                >
+                  + New Project
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                {projects.map((p) => {
+                  const isSelected = activeProject?.id === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      className={`group flex items-center justify-between p-2.5 rounded-xl text-xs transition border cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#242B30] border-[#313A40] text-[#F3F4F6] shadow-sm'
+                          : 'border-transparent text-[#9DA8B0] hover:bg-[#1C2226] hover:text-[#F3F4F6]'
+                      }`}
+                      onClick={() => onSelectProject(p)}
+                    >
+                      <div className="truncate flex-1 pr-2">
+                        <div className="font-bold truncate text-[#F3F4F6]">{p.name}</div>
+                        <div className="text-[10px] text-[#6B7780] truncate mt-0.5 font-mono">
+                          {isSelected ? 'Active Workspace' : 'Idle'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteProject(p.id);
+                        }}
+                        className="p-1 text-[#6B7780] hover:text-[#A47A7A] opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                        title="Delete Project"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2 pt-2">
             <button
               onClick={() => setShowModal(true)}
-              className="p-1 rounded text-[#9DA8B0] hover:text-[#F3F4F6] hover:bg-[#242B30] transition cursor-pointer"
-              title="Create Project"
+              className="p-2 rounded-xl bg-[#242B30] border border-[#313A40] text-[#F3F4F6] hover:bg-[#313A40] transition cursor-pointer"
+              title="Create New Project"
             >
               <Plus className="w-4 h-4" />
             </button>
-          </div>
-        </div>
-
-        {projects.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-[#6B7780] text-xs">
-            <p className="mb-2 text-[11px]">No projects active.</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-[#242B30] border border-[#313A40] text-[#F3F4F6] font-bold hover:bg-[#313A40] transition text-xs cursor-pointer"
-            >
-              + New Project
-            </button>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {projects.map((p) => {
-              const isSelected = activeProject?.id === p.id;
-              return (
-                <div
-                  key={p.id}
-                  className={`group flex items-center justify-between p-2.5 rounded-xl text-xs transition border cursor-pointer ${
-                    isSelected
-                      ? 'bg-[#242B30] border-[#313A40] text-[#F3F4F6] shadow-sm'
-                      : 'border-transparent text-[#9DA8B0] hover:bg-[#1C2226] hover:text-[#F3F4F6]'
-                  }`}
-                  onClick={() => onSelectProject(p)}
-                >
-                  <div className="truncate flex-1 pr-2">
-                    <div className="font-bold truncate text-[#F3F4F6]">{p.name}</div>
-                    <div className="text-[10px] text-[#6B7780] truncate mt-0.5 font-mono">
-                      {isSelected ? 'Active Workspace' : 'Idle'}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteProject(p.id);
-                    }}
-                    className="p-1 text-[#6B7780] hover:text-[#A47A7A] opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                    title="Delete Project"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
           </div>
         )}
       </div>
 
       {/* Active Project Files */}
-      {activeProject && (
-        <div className="p-4 border-t border-[#313A40] bg-[#171C20]">
+      {activeProject && !isCollapsed && (
+        <div className="p-3 border-t border-[#313A40] bg-[#171C20]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold text-[#6B7780] uppercase tracking-wider">DOCUMENTS</span>
           </div>
 
           <label className="flex items-center justify-center gap-2 w-full p-2 border border-dashed border-[#313A40] rounded-xl text-xs text-[#9DA8B0] hover:border-[#6B7780] hover:text-[#F3F4F6] cursor-pointer transition">
             <Plus className="w-3.5 h-3.5 text-[#9DA8B0]" />
-            <span>{isUploading ? 'Uploading Document...' : 'Attach Document'}</span>
+            <span>{isUploading ? 'Uploading...' : 'Attach Document'}</span>
             <input
               type="file"
               accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.json,.txt,.md"
@@ -205,11 +230,21 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         </div>
       )}
 
-      {/* Bottom Collapse Button */}
-      <div className="p-3 border-t border-[#313A40] bg-[#171C20] flex items-center text-xs text-[#6B7780]">
-        <button className="flex items-center gap-1.5 hover:text-[#F3F4F6] transition cursor-pointer font-medium">
-          <ChevronLeft className="w-4 h-4" />
-          <span>Collapse</span>
+      {/* Bottom Collapse Toggle Button */}
+      <div className="p-3 border-t border-[#313A40] bg-[#171C20] flex items-center justify-between text-xs text-[#6B7780]">
+        <button
+          onClick={onToggleCollapse}
+          className="w-full flex items-center justify-center gap-1.5 hover:text-[#F3F4F6] transition cursor-pointer font-medium p-1 rounded-lg hover:bg-[#242B30]"
+          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4 text-[#9DA8B0]" />
+          ) : (
+            <>
+              <ChevronLeft className="w-4 h-4 text-[#9DA8B0]" />
+              <span>Collapse</span>
+            </>
+          )}
         </button>
       </div>
 

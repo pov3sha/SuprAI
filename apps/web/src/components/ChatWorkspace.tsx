@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, FileText, Sparkles, CheckCircle2, Cpu, Trash2, Copy, Maximize2, Check } from 'lucide-react';
+import { Send, FileText, Sparkles, CheckCircle2, Cpu, Trash2, Copy, Maximize2, Minimize2, Check, X } from 'lucide-react';
 import { Project, Message, Evidence, SSEEvent } from '../lib/types';
 
 interface ChatWorkspaceProps {
@@ -27,6 +27,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [copied, setCopied] = useState(false);
+  const [maximizedPanel, setMaximizedPanel] = useState<'chat' | 'report' | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,9 +115,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#F3F4F6]">AI ORGANIZATION CHAT</h4>
               <p className="text-[10px] text-[#6B7780]">Conversation between Manager and Workers</p>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-[#7FAF91]">
-              <span className="w-2 h-2 rounded-full bg-[#7FAF91] animate-pulse" />
-              <span>Live Updates</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-[#7FAF91]">
+                <span className="w-2 h-2 rounded-full bg-[#7FAF91] animate-pulse" />
+                <span>Live Updates</span>
+              </div>
+              <button
+                onClick={() => setMaximizedPanel('chat')}
+                className="p-1.5 rounded-lg bg-[#242B30] border border-[#313A40] text-[#9DA8B0] hover:text-[#F3F4F6] transition cursor-pointer"
+                title="Extend / Maximize Chat"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -129,7 +139,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </div>
             ) : (
               interAgentMessages.map((msg, idx) => {
-                const isManager = (msg.payload?.agent_name || msg.payload?.sender || '').toLowerCase().includes('manager');
                 const title = msg.payload?.sender && msg.payload?.target
                   ? `${msg.payload.sender.toUpperCase()} → ${msg.payload.target.toUpperCase()}`
                   : (msg.payload?.agent_name || 'MANAGER').toUpperCase();
@@ -180,8 +189,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 {copied ? <Check className="w-3.5 h-3.5 text-[#7FAF91]" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
               <button
+                onClick={() => setMaximizedPanel('report')}
                 className="p-1.5 rounded-lg bg-[#242B30] border border-[#313A40] text-[#9DA8B0] hover:text-[#F3F4F6] transition cursor-pointer"
-                title="Maximize View"
+                title="Extend / Maximize Report"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -241,6 +251,88 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </button>
         </form>
       </div>
+
+      {/* MAXIMIZED MODAL OVERLAY */}
+      {maximizedPanel && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 p-6 flex items-center justify-center">
+          <div className="bg-[#1C2226] border border-[#313A40] rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#313A40] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded bg-[#242B30] border border-[#313A40] flex items-center justify-center text-[#9DA8B0] font-bold text-xs">
+                  👤
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#F3F4F6]">
+                    {maximizedPanel === 'report' ? 'MANAGER AI FINAL REPORT' : 'AI ORGANIZATION CHAT STREAM'}
+                  </h3>
+                  <p className="text-[10px] font-mono text-[#6B7780]">Expanded Full View</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {maximizedPanel === 'report' && (
+                  <button
+                    onClick={handleCopyReport}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#242B30] border border-[#313A40] text-xs text-[#9DA8B0] hover:text-[#F3F4F6] transition cursor-pointer font-medium"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-[#7FAF91]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setMaximizedPanel(null)}
+                  className="p-2 rounded-xl bg-[#242B30] border border-[#313A40] text-[#9DA8B0] hover:text-[#F3F4F6] transition cursor-pointer"
+                  title="Close Fullscreen View"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
+              {maximizedPanel === 'report' ? (
+                !lastAssistantMessage ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-[#6B7780] p-4 text-xs">
+                    <p className="font-semibold text-[#9DA8B0]">No report synthesized yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {renderFormattedMarkdown(lastAssistantMessage.content)}
+                  </div>
+                )
+              ) : (
+                <div className="space-y-3">
+                  {interAgentMessages.map((msg, idx) => {
+                    const title = msg.payload?.sender && msg.payload?.target
+                      ? `${msg.payload.sender.toUpperCase()} → ${msg.payload.target.toUpperCase()}`
+                      : (msg.payload?.agent_name || 'MANAGER').toUpperCase();
+                    
+                    const timeStr = msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : '18:58:38';
+                    const text = msg.payload?.question || msg.payload?.response || msg.payload?.message || msg.payload?.objective || 'Task execution event';
+
+                    return (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-[#242B30] border border-[#313A40] text-xs">
+                        <div className="w-8 h-8 rounded-full bg-[#1C2226] border border-[#313A40] flex items-center justify-center text-[#9DA8B0] text-xs font-bold shrink-0">
+                          👤
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between text-[11px] font-mono mb-1">
+                            <span className="font-bold text-[#F3F4F6]">{title}</span>
+                            <span className="text-[#6B7780]">{timeStr}</span>
+                          </div>
+                          <p className="text-xs text-[#9DA8B0] leading-relaxed">
+                            {text}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
