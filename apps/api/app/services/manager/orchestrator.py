@@ -38,9 +38,15 @@ class ManagerOrchestrator:
         # Idempotency / State Guard
         current_state = ExecutionState.CREATED
         self._publish_state_transition(conversation_id, execution_id, current_state, ExecutionState.PLANNING, "Starting objective analysis")
+        
+        event_publisher.publish_event(
+            conversation_id=conversation_id,
+            event_type="manager_started",
+            payload={"execution_id": execution_id, "prompt": prompt}
+        )
 
         try:
-            # 1. Instantiate Manager AI Provider dynamically (Ollama)
+            # 1. Instantiate Manager AI Provider (Local Ollama Engine)
             manager_provider = get_ai_provider(role_name="manager")
             logger.info(f"Manager AI Provider initialized: {manager_provider.provider} ({manager_provider.model})")
 
@@ -63,12 +69,18 @@ class ManagerOrchestrator:
                     source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
                     doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:400]}\n"
 
-            # 4. Manager AI Dynamic Workflow Decision (Simple vs Complex Delegation)
+            # 4. Manager AI Dynamic Workflow Decision (Decomposition)
+            event_publisher.publish_event(
+                conversation_id=conversation_id,
+                event_type="manager_planning",
+                payload={"execution_id": execution_id, "file_count": len(files)}
+            )
+
             manager_decomp_prompt = (
                 f"USER OBJECTIVE: '{prompt}'\n\n"
                 f"ATTACHED DOCUMENTS:\n{doc_context_summary if doc_context_summary else 'No files attached.'}\n\n"
                 "Determine if this objective requires multi-agent worker task delegation or direct synthesis.\n"
-                "If delegation is required, return a JSON array of tasks with target roles (consultant, analyst, researcher):\n"
+                "If delegation is required, return a JSON array of tasks with target roles (consultant, analyst, researcher, intern):\n"
                 "[\n"
                 "  {\"objective\": \"Task 1 description\", \"role\": \"analyst\", \"capability\": \"document_analysis\"}\n"
                 "]\n"
@@ -103,6 +115,11 @@ class ManagerOrchestrator:
             if not dynamic_tasks and ("summarize" in prompt.lower() or len(prompt.split()) < 6):
                 # Direct Manager Synthesis
                 self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.SYNTHESIZING, "Direct Manager synthesis")
+                event_publisher.publish_event(
+                    conversation_id=conversation_id,
+                    event_type="manager_synthesizing",
+                    payload={"execution_id": execution_id}
+                )
                 final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, [], execution_id)
             else:
                 # Complex objective -> Task Graph & Parallel Workers
@@ -146,25 +163,41 @@ class ManagerOrchestrator:
 
                 # Reviewing & Evidence Verification
                 self._publish_state_transition(conversation_id, execution_id, ExecutionState.WAITING_FOR_WORKERS, ExecutionState.REVIEWING, "Reviewing worker results")
+                event_publisher.publish_event(
+                    conversation_id=conversation_id,
+                    event_type="manager_reviewing",
+                    payload={"execution_id": execution_id, "worker_count": len(worker_outputs)}
+                )
 
                 # Final Synthesis
                 self._publish_state_transition(conversation_id, execution_id, ExecutionState.REVIEWING, ExecutionState.SYNTHESIZING, "Synthesizing final deliverable")
+                event_publisher.publish_event(
+                    conversation_id=conversation_id,
+                    event_type="manager_synthesizing",
+                    payload={"execution_id": execution_id}
+                )
                 final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id)
 
             # 6. Save Assistant Message & Transition to COMPLETED
+            elapsed_total = int((time.time() - start_time) * 1000)
             assistant_msg = Message(
                 conversation_id=conversation_id,
                 role="assistant",
                 content=final_content,
                 metadata_json={
                     "execution_id": execution_id,
-                    "elapsed_ms": int((time.time() - start_time) * 1000)
+                    "elapsed_ms": elapsed_total
                 }
             )
             db.add(assistant_msg)
             db.commit()
 
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.SYNTHESIZING, ExecutionState.COMPLETED, "Execution completed successfully")
+            event_publisher.publish_event(
+                conversation_id=conversation_id,
+                event_type="execution_completed",
+                payload={"execution_id": execution_id, "elapsed_ms": elapsed_total}
+            )
             return final_content
 
         except ConfigurationError as err:

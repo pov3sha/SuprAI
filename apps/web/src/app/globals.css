@@ -3,19 +3,49 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 11, 15, 23;
-  --background-end-rgb: 15, 23, 42;
+  --bg-charcoal: #11161B;
+  --bg-panel: #1B242C;
+  --border-muted: #2D3945;
+  --text-cool: #5A6A78;
+  --text-secondary: #A3ACB3;
+  --text-primary: #F1F5F9;
+  --accent-emerald: #10B981;
+  --accent-indigo: #6366F1;
+  --accent-rose: #EF4444;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--text-primary);
+  background-color: var(--bg-charcoal);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes flow-down {
+  0% { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+.animate-scanline {
+  animation: scanline 2.5s linear infinite;
+}
+
+.animate-flow-line {
+  stroke-dasharray: 6 6;
+  animation: flow-down 1.2s linear infinite;
 }

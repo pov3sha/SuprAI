@@ -34,6 +34,7 @@ def execute_worker_task(task_id: str) -> dict:
 
         # 2. Get Ollama AI Client for Worker Role
         ai_provider = get_ai_provider(role_name=role_name)
+        agent_name = worker.name if worker else "Worker"
 
         event_publisher.publish_event(
             conversation_id=task.conversation_id,
@@ -41,7 +42,7 @@ def execute_worker_task(task_id: str) -> dict:
             payload={
                 "task_id": task.id,
                 "agent_id": worker.id if worker else "worker_1",
-                "agent_name": worker.name if worker else "Worker",
+                "agent_name": agent_name,
                 "provider": f"{ai_provider.provider} ({ai_provider.model})",
                 "objective": task.objective
             }
@@ -59,6 +60,20 @@ def execute_worker_task(task_id: str) -> dict:
             primary_doc_id = primary_doc.id
             primary_doc_name = primary_doc.filename
             chunks = db.query(FileChunk).filter(FileChunk.file_id == primary_doc_id).order_by(FileChunk.page_number).all()
+            
+            if chunks:
+                event_publisher.publish_event(
+                    conversation_id=task.conversation_id,
+                    event_type="document_reading",
+                    payload={
+                        "task_id": task.id,
+                        "agent_name": agent_name,
+                        "filename": primary_doc_name,
+                        "page": chunks[0].page_number,
+                        "snippet": chunks[0].content[:150]
+                    }
+                )
+
             for chunk in chunks[:15]:
                 source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
                 doc_context += f"\n--- {primary_doc_name} ({source_label} {chunk.page_number}) ---\n{chunk.content}\n"
@@ -82,7 +97,7 @@ def execute_worker_task(task_id: str) -> dict:
         event_publisher.publish_event(
             conversation_id=task.conversation_id,
             event_type="agent_started",
-            payload={"task_id": task.id, "agent_name": worker.name if worker else "Worker"}
+            payload={"task_id": task.id, "agent_name": agent_name, "objective": task.objective}
         )
 
         response = ai_provider.generate(
@@ -131,7 +146,7 @@ def execute_worker_task(task_id: str) -> dict:
         event_publisher.publish_event(
             conversation_id=task.conversation_id,
             event_type="agent_completed",
-            payload={"task_id": task.id, "summary": worker_summary[:200]}
+            payload={"task_id": task.id, "agent_name": agent_name, "summary": worker_summary[:200]}
         )
 
         # 5. Persist & Validate Real Evidence in PostgreSQL
@@ -159,6 +174,8 @@ def execute_worker_task(task_id: str) -> dict:
                         event_type="evidence_created",
                         payload={
                             "task_id": task.id,
+                            "agent_name": agent_name,
+                            "document_name": primary_doc_name,
                             "claim": finding.claim,
                             "page": ev_item.page,
                             "excerpt": ev_item.excerpt,
@@ -169,6 +186,11 @@ def execute_worker_task(task_id: str) -> dict:
         return output_dict
     except Exception as e:
         logger.error(f"Worker task execution failed for task {task_id}: {e}")
+        event_publisher.publish_event(
+            conversation_id=task.conversation_id if task else "unknown",
+            event_type="agent_failed",
+            payload={"task_id": task_id, "error": str(e)}
+        )
         return None
     finally:
         db.close()

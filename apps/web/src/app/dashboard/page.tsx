@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { ProjectSidebar } from '@/components/ProjectSidebar';
 import { ChatWorkspace } from '@/components/ChatWorkspace';
-import { OrgDiagram } from '@/components/OrgDiagram';
+import { AIOrgCommandCenter } from '@/components/AIOrgCommandCenter';
 import { LiveFeed } from '@/components/LiveFeed';
 import { EvidenceDrawer } from '@/components/EvidenceDrawer';
 import { ProjectsView } from '@/components/views/ProjectsView';
@@ -142,9 +142,17 @@ export default function DashboardPage() {
       setMessages([]);
       setTasks([]);
       setEvidenceList([]);
+      setIsProcessing(false);
     } catch (e) {
       console.error('Failed to clear workspace:', e);
     }
+  };
+
+  const handleClearWorkspaceMessages = () => {
+    setMessages([]);
+    setTasks([]);
+    setEvidenceList([]);
+    setIsProcessing(false);
   };
 
   const handleFileUpload = async (file: File) => {
@@ -193,7 +201,7 @@ export default function DashboardPage() {
   };
 
   // Real-time SSE Stream Listener
-  const { events } = useSSE(conversationId);
+  const { events, isConnected } = useSSE(conversationId);
 
   useEffect(() => {
     if (!events.length || !conversationId) return;
@@ -237,8 +245,10 @@ export default function DashboardPage() {
     }
   }, [events, conversationId]);
 
+  const activeDocName = files.length > 0 ? files[0].filename : undefined;
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#0B0F17] text-white">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#11161B] text-white">
       <Header />
 
       <div className="flex flex-1 overflow-hidden">
@@ -259,17 +269,28 @@ export default function DashboardPage() {
           onCloseModal={() => setForceOpenModal(false)}
         />
 
-        {/* Center Dynamic Workspace Area */}
+        {/* Center Main Execution Command Center */}
         {activeNav === 'dashboard' && (
-          <ChatWorkspace
-            activeProject={activeProject}
-            messages={messages}
-            onSubmitObjective={handleSubmitObjective}
-            isProcessing={isProcessing}
-            onSelectEvidence={(ev) => setSelectedEvidence(ev)}
-            evidenceList={evidenceList}
-            onOpenCreateProject={() => setForceOpenModal(true)}
-          />
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <AIOrgCommandCenter
+              tasks={tasks}
+              isProcessing={isProcessing}
+              events={events}
+              evidenceList={evidenceList}
+              activeDocumentName={activeDocName}
+              onSelectEvidence={(ev) => setSelectedEvidence(ev)}
+            />
+            <ChatWorkspace
+              activeProject={activeProject}
+              messages={messages}
+              onSubmitObjective={handleSubmitObjective}
+              isProcessing={isProcessing}
+              onSelectEvidence={(ev) => setSelectedEvidence(ev)}
+              evidenceList={evidenceList}
+              onOpenCreateProject={() => setForceOpenModal(true)}
+              onClearWorkspace={handleClearWorkspaceMessages}
+            />
+          </div>
         )}
 
         {activeNav === 'projects' && (
@@ -300,10 +321,9 @@ export default function DashboardPage() {
 
         {activeNav === 'activity' && <ActivityView events={events} />}
 
-        {/* Right AI Organization Panel */}
-        <div className="w-80 border-l border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)] shrink-0">
-          <OrgDiagram tasks={tasks} isProcessing={isProcessing} />
-          <LiveFeed events={events} />
+        {/* Right Execution Timeline Panel */}
+        <div className="w-80 border-l border-[#2D3945] bg-[#11161B] p-4 flex flex-col h-[calc(100vh-3.5rem)] shrink-0 overflow-y-auto">
+          <LiveFeed events={events} isConnected={isConnected} />
         </div>
       </div>
 

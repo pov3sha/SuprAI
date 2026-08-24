@@ -74,10 +74,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   ];
 
   return (
-    <aside className="w-60 border-r border-[#263347] bg-[#141A26] flex flex-col h-[calc(100vh-3.5rem)] text-white select-none">
+    <aside className="w-60 border-r border-[#2D3945] bg-[#11161B] flex flex-col h-[calc(100vh-3.5rem)] text-white select-none">
       {/* Navigation section */}
-      <div className="p-4 space-y-1 border-b border-[#263347]">
-        <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Workspace Navigation</div>
+      <div className="p-4 space-y-1 border-b border-[#2D3945]">
+        <div className="text-[10px] font-semibold text-[#5A6A78] uppercase tracking-wider mb-2">Workspace Navigation</div>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeNav === item.id;
@@ -86,7 +86,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               key={item.id}
               onClick={() => setActiveNav(item.id)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition cursor-pointer ${
-                isActive ? 'bg-[#6366F1]/10 text-[#6366F1] border border-[#6366F1]/20' : 'text-[#94A3B8] hover:bg-[#1B2433] hover:text-white'
+                isActive ? 'bg-[#6366F1]/10 text-[#6366F1] border border-[#6366F1]/20' : 'text-[#A3ACB3] hover:bg-[#1B242C] hover:text-[#F1F5F9]'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -99,7 +99,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       {/* Projects section */}
       <div className="flex-1 flex flex-col min-h-0 p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider">Projects ({projects.length})</span>
+          <span className="text-[10px] font-semibold text-[#5A6A78] uppercase tracking-wider">Projects ({projects.length})</span>
           <div className="flex items-center gap-1">
             {projects.length > 0 && (
               <button
@@ -116,7 +116,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             )}
             <button
               onClick={() => setShowModal(true)}
-              className="p-1 rounded text-[#94A3B8] hover:text-white hover:bg-[#1B2433] transition cursor-pointer"
+              className="p-1 rounded text-[#A3ACB3] hover:text-[#F1F5F9] hover:bg-[#1B242C] transition cursor-pointer"
               title="Create Project"
             >
               <Plus className="w-4 h-4" />
@@ -125,7 +125,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         </div>
 
         {projects.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-[#94A3B8] text-xs">
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-[#5A6A78] text-xs">
             <p className="mb-2 text-[11px]">No projects active.</p>
             <button
               onClick={() => setShowModal(true)}
@@ -143,21 +143,21 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   key={p.id}
                   className={`group flex items-center justify-between p-2.5 rounded-md text-xs transition border cursor-pointer ${
                     isSelected
-                      ? 'bg-[#1B2433] border-[#6366F1]/40 text-white'
-                      : 'border-transparent text-[#94A3B8] hover:bg-[#1B2433]/50 hover:text-white'
+                      ? 'bg-[#1B242C] border-[#6366F1]/40 text-[#F1F5F9]'
+                      : 'border-transparent text-[#A3ACB3] hover:bg-[#1B242C]/50 hover:text-[#F1F5F9]'
                   }`}
                   onClick={() => onSelectProject(p)}
                 >
                   <div className="truncate flex-1 pr-2">
                     <div className="font-semibold truncate">{p.name}</div>
-                    {p.description && <div className="text-[10px] text-[#94A3B8] truncate mt-0.5">{p.description}</div>}
+                    {p.description && <div className="text-[10px] text-[#5A6A78] truncate mt-0.5">{p.description}</div>}
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onDeleteProject(p.id);
                     }}
-                    className="p-1 text-[#94A3B8] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    className="p-1 text-[#5A6A78] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition cursor-pointer"
                     title="Delete Project"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -171,12 +171,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
       {/* Active Project Files */}
       {activeProject && (
-        <div className="p-4 border-t border-[#263347] bg-[#0E131F]">
+        <div className="p-4 border-t border-[#2D3945] bg-[#1B242C]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider">Project Documents</span>
+            <span className="text-[10px] font-semibold text-[#5A6A78] uppercase tracking-wider">Project Documents</span>
           </div>
 
-          <label className="flex items-center justify-center gap-2 w-full p-2 border border-dashed border-[#263347] rounded-md text-xs text-[#94A3B8] hover:border-[#6366F1] hover:text-white cursor-pointer transition">
+          <label className="flex items-center justify-center gap-2 w-full p-2 border border-dashed border-[#2D3945] rounded-md text-xs text-[#A3ACB3] hover:border-[#6366F1] hover:text-[#F1F5F9] cursor-pointer transition">
             <FileText className="w-3.5 h-3.5" />
             <span>{isUploading ? 'Uploading Document...' : '+ Attach Document'}</span>
             <input
@@ -189,7 +189,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
           <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
             {files.map((f) => (
-              <div key={f.id} className="flex items-center justify-between p-1.5 rounded bg-[#141A26] text-[11px] text-slate-300 border border-[#263347]">
+              <div key={f.id} className="flex items-center justify-between p-1.5 rounded bg-[#11161B] text-[11px] text-[#A3ACB3] border border-[#2D3945]">
                 <span className="truncate max-w-[120px] font-mono text-[10px]">{f.filename}</span>
                 <span className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
                   <FileCheck className="w-3 h-3" />
@@ -204,36 +204,36 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       {/* Clean Modal for Project Creation */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-[#141A26] border border-[#263347] rounded-xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#263347] pb-3">
-              <h3 className="text-sm font-semibold text-white">Create New Project</h3>
-              <button onClick={handleModalClose} className="text-[#94A3B8] hover:text-white">
+          <div className="bg-[#1B242C] border border-[#2D3945] rounded-xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2D3945] pb-3">
+              <h3 className="text-sm font-semibold text-[#F1F5F9]">Create New Project</h3>
+              <button onClick={handleModalClose} className="text-[#A3ACB3] hover:text-[#F1F5F9]">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleModalSubmit} className="space-y-3">
               <div>
-                <label className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block mb-1">Project Name</label>
+                <label className="text-[11px] font-semibold text-[#A3ACB3] uppercase tracking-wider block mb-1">Project Name</label>
                 <input
                   type="text"
                   placeholder="Enter project name..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0B0F17] border border-[#263347] rounded-md text-xs text-white focus:outline-none focus:border-[#6366F1]"
+                  className="w-full px-3 py-2 bg-[#11161B] border border-[#2D3945] rounded-md text-xs text-[#F1F5F9] focus:outline-none focus:border-[#6366F1]"
                   autoFocus
                   required
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block mb-1">Description (Optional)</label>
+                <label className="text-[11px] font-semibold text-[#A3ACB3] uppercase tracking-wider block mb-1">Description (Optional)</label>
                 <input
                   type="text"
                   placeholder="Enter description..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0B0F17] border border-[#263347] rounded-md text-xs text-white focus:outline-none focus:border-[#6366F1]"
+                  className="w-full px-3 py-2 bg-[#11161B] border border-[#2D3945] rounded-md text-xs text-[#F1F5F9] focus:outline-none focus:border-[#6366F1]"
                 />
               </div>
 
@@ -241,7 +241,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 <button
                   type="button"
                   onClick={handleModalClose}
-                  className="px-3 py-1.5 rounded-md text-xs text-[#94A3B8] hover:text-white border border-[#263347]"
+                  className="px-3 py-1.5 rounded-md text-xs text-[#A3ACB3] hover:text-[#F1F5F9] border border-[#2D3945]"
                 >
                   Cancel
                 </button>

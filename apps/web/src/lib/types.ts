@@ -11,8 +11,10 @@ export interface FileRecord {
   id: string;
   filename: string;
   size: number;
+  size_bytes?: number;
   page_count: number;
   processing_status?: string;
+  mime_type?: string;
 }
 
 export interface Message {
