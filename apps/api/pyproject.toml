@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "suprai-backend"
-version = "1.0.0"
-description = "SuprAI Backend Engine"
+version = "2.0.0"
+description = "SuprAI Autonomous Multi-Agent Reasoning Engine"
 authors = ["SuprAI Team <engineering@suprai.ai>"]
 readme = "README.md"
 

@@ -1,44 +1,79 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
-
-# --- MANAGER CONTRACTS ---
-
-class TaskSpec(BaseModel):
-    task_id: str = Field(..., description="Unique slug or ID for this task within the plan (e.g. task_1)")
-    objective: str = Field(..., description="Clear action statement for the worker")
-    required_capabilities: List[str] = Field(default_factory=list, description="Capabilities required to execute this task")
-    priority: Literal["low", "medium", "high"] = Field("medium", description="Priority level")
-    dependencies: List[str] = Field(default_factory=list, description="List of task_ids that must complete before this task")
-
-class DecompositionResponse(BaseModel):
-    objective: str = Field(..., description="Understanding of the overall objective")
-    tasks: List[TaskSpec] = Field(..., description="Decomposed tasks graph")
-
-# --- WORKER CONTRACTS ---
+from typing import List, Optional, Dict, Any
 
 class EvidenceItem(BaseModel):
-    document_id: Optional[str] = Field(None, description="ID of the document source if applicable")
-    page: int = Field(..., description="Page number where the evidence appears (1-based index)")
-    excerpt: str = Field(..., description="Exact verbatim quote/excerpt supporting the claim")
-    confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence score of the evidence extraction")
+    evidence_id: Optional[str] = None
+    task_id: Optional[str] = None
+    worker_id: Optional[str] = None
+    document_id: Optional[str] = None
+    filename: Optional[str] = None
+    chunk_id: Optional[str] = None
+    page: int = 1
+    section: Optional[str] = None
+    excerpt: str
+    confidence: float = 0.95
+    evidence_type: str = "direct_quote"  # "direct_quote" | "inference"
+
+class NumericalClaim(BaseModel):
+    metric_name: str
+    value_raw: str
+    value_float: Optional[float] = None
+    unit: Optional[str] = None
+    page: int = 1
+    section: Optional[str] = None
+
+class DeterministicCalculation(BaseModel):
+    metric_name: str
+    formula: str
+    input_values: Dict[str, float] = Field(default_factory=dict)
+    calculated_result: float
+    stated_result: Optional[float] = None
+    discrepancy_amount: float = 0.0
+    is_discrepant: bool = False
+    explanation: str = ""
+
+class Contradiction(BaseModel):
+    claim_a: str
+    page_a: int = 1
+    claim_b: str
+    page_b: int = 1
+    conflict_description: str
+    severity: str = "moderate"  # "critical" | "moderate"
 
 class Finding(BaseModel):
-    claim: str = Field(..., description="Factual claim or observation derived from analysis")
-    evidence: List[EvidenceItem] = Field(default_factory=list, description="List of evidence items supporting this claim")
+    claim: str
+    analysis: Optional[str] = None
+    evidence: List[EvidenceItem] = Field(default_factory=list)
+
+class AgentQuestion(BaseModel):
+    agent_name: str
+    target: str = "Manager"
+    question: str
+    ambiguity_type: Optional[str] = None
+
+class ManagerClarification(BaseModel):
+    sender: str = "Manager"
+    target: str
+    response: str
+    strategic_direction: Optional[str] = None
 
 class WorkerResponse(BaseModel):
-    task_id: str = Field(..., description="ID of the task executed")
-    status: Literal["completed", "failed"] = Field("completed", description="Outcome of execution")
-    summary: str = Field(..., description="Executive summary of the worker's findings")
-    findings: List[Finding] = Field(default_factory=list, description="List of structured findings with page-level evidence")
+    agent_role: str
+    task_id: str
+    status: str = "completed"
+    summary: str
+    uncertainties: List[str] = Field(default_factory=list)
+    findings: List[Finding] = Field(default_factory=list)
+    numerical_claims: List[NumericalClaim] = Field(default_factory=list)
+    calculations: List[DeterministicCalculation] = Field(default_factory=list)
+    contradictions: List[Contradiction] = Field(default_factory=list)
+    evidence: List[EvidenceItem] = Field(default_factory=list)
 
-# --- API DTO SCHEMAS ---
+class TaskDecompositionItem(BaseModel):
+    role: str
+    capability: str
+    objective: str
 
-class CreateProjectDTO(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class CreateObjectiveDTO(BaseModel):
-    conversation_id: Optional[str] = None
-    prompt: str
-    file_ids: List[str] = Field(default_factory=list)
+class TaskDecompositionPlan(BaseModel):
+    reasoning: str
+    tasks: List[TaskDecompositionItem]

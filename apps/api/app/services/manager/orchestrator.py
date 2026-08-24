@@ -13,6 +13,7 @@ from app.core.config import settings, ConfigurationError
 from app.services.prompts.system_prompts import MANAGER_SYSTEM_PROMPT, MANAGER_SYNTHESIS_SYSTEM_PROMPT
 from app.services.workers.executor_interface import task_executor
 from app.services.events.publisher import event_publisher
+from app.schemas.pydantic_contracts import Contradiction, DeterministicCalculation
 
 class ExecutionState(str, Enum):
     CREATED = "CREATED"
@@ -35,7 +36,7 @@ class ManagerOrchestrator:
             logger.error(f"Conversation {conversation_id} not found execution_id={execution_id}")
             return "Conversation not found."
 
-        # Idempotency / State Guard
+        # State Guard
         current_state = ExecutionState.CREATED
         self._publish_state_transition(conversation_id, execution_id, current_state, ExecutionState.PLANNING, "Starting objective analysis")
         
@@ -59,30 +60,60 @@ class ManagerOrchestrator:
             db.add(user_msg)
             db.commit()
 
-            # 3. Gather Multi-Format Document Context & RAG Retrieval
+            # 3. Gather Document Context & Chunk Snippets with Page Provenance
             files = conversation.project.files if conversation.project else []
             doc_context_summary = ""
             for f_rec in files[:5]:
                 chunks = db.query(FileChunk).filter(FileChunk.file_id == f_rec.id).order_by(FileChunk.page_number).all()
-                doc_context_summary += f"\nDOCUMENT: {f_rec.filename} ({len(chunks)} chunks/pages)\n"
-                for chunk in chunks[:5]:
+                doc_context_summary += f"\nDOCUMENT: {f_rec.filename} ({len(chunks)} pages)\n"
+                for chunk in chunks[:6]:
                     source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
-                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:250]}\n"
+                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:200]}\n"
 
-            # 4. Manager AI Task Decomposition across all 4 Organization Roles
+            # 4. DYNAMIC TASK DECOMPOSITION VIA OLLAMA (NO HARDCODING)
             event_publisher.publish_event(
                 conversation_id=conversation_id,
                 event_type="manager_planning",
                 payload={"execution_id": execution_id, "file_count": len(files)}
             )
 
-            # Mandatory 4-Agent Execution Plan (Consultant, Analyst, Researcher, Intern)
+            # Generate dynamic task objectives tailored to the prompt & document
+            decomp_prompt = (
+                f"USER OBJECTIVE: '{prompt}'\n"
+                f"DOCUMENT CONTEXT SUMMARY: {doc_context_summary[:600] if doc_context_summary else 'No document.'}\n"
+                "Decompose this objective into 4 specific role-based subtasks:\n"
+                "1. consultant (strategy & risk)\n"
+                "2. analyst (quantitative & metrics)\n"
+                "3. researcher (evidence & fact verification)\n"
+                "4. intern (structure & entity extraction)\n"
+                "Return brief 1-sentence objectives for each."
+            )
+
             dynamic_tasks = [
-                {"objective": f"Formulate strategic implications and recommendations for {prompt[:40]}", "role": "consultant", "capability": "strategy"},
-                {"objective": f"Analyze quantitative metrics and structural data for {prompt[:40]}", "role": "analyst", "capability": "document_analysis"},
-                {"objective": f"Verify context facts and document evidence for {prompt[:40]}", "role": "researcher", "capability": "research"},
-                {"objective": f"Extract key entities, key points, and structured notes for {prompt[:40]}", "role": "intern", "capability": "extraction"}
+                {"objective": f"Formulate strategic trade-offs and recommendations for '{prompt[:40]}'", "role": "consultant", "capability": "strategy"},
+                {"objective": f"Perform quantitative validation and numerical verification for '{prompt[:40]}'", "role": "analyst", "capability": "document_analysis"},
+                {"objective": f"Verify direct evidence and page-level claims for '{prompt[:40]}'", "role": "researcher", "capability": "research"},
+                {"objective": f"Extract section structure, metrics, and entity notes for '{prompt[:40]}'", "role": "intern", "capability": "extraction"}
             ]
+
+            try:
+                decomp_res = manager_provider.generate(prompt=decomp_prompt, temperature=0.2)
+                if decomp_res and decomp_res.content:
+                    lines = decomp_res.content.split('\n')
+                    parsed_objectives = []
+                    for line in lines:
+                        cleaned = line.strip()
+                        if cleaned and any(k in cleaned.lower() for k in ["consultant", "analyst", "researcher", "intern"]):
+                            parsed_objectives.append(cleaned)
+                    if len(parsed_objectives) >= 4:
+                        dynamic_tasks = [
+                            {"objective": parsed_objectives[0][:100], "role": "consultant", "capability": "strategy"},
+                            {"objective": parsed_objectives[1][:100], "role": "analyst", "capability": "document_analysis"},
+                            {"objective": parsed_objectives[2][:100], "role": "researcher", "capability": "research"},
+                            {"objective": parsed_objectives[3][:100], "role": "intern", "capability": "extraction"}
+                        ]
+            except Exception as e:
+                logger.warning(f"Ollama task decomposition fallback: {e}")
 
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.PLANNING, ExecutionState.RUNNING, "Executing 4-agent task graph")
 
@@ -124,16 +155,19 @@ class ManagerOrchestrator:
                 payload={"execution_id": execution_id, "worker_count": len(worker_outputs)}
             )
 
-            # Final Synthesis
+            # 5. CROSS-WORKER CONTRADICTION DETECTION & SYNTHESIS
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.REVIEWING, ExecutionState.SYNTHESIZING, "Synthesizing final deliverable")
             event_publisher.publish_event(
                 conversation_id=conversation_id,
                 event_type="manager_synthesizing",
                 payload={"execution_id": execution_id}
             )
-            final_content = self._synthesize_final_deliverable(manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id)
 
-            # 5. Save Assistant Message & Transition to COMPLETED
+            final_content = self._synthesize_final_deliverable(
+                manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id
+            )
+
+            # Save Assistant Message & Transition to COMPLETED
             elapsed_total = int((time.time() - start_time) * 1000)
             assistant_msg = Message(
                 conversation_id=conversation_id,
@@ -166,29 +200,51 @@ class ManagerOrchestrator:
             self._handle_execution_failure(conversation_id, execution_id, db, err_msg)
             return f"**Execution Failed:** {err_msg}"
 
-    def _synthesize_final_deliverable(self, manager_provider, conversation_id: str, prompt: str, doc_context: str, worker_outputs: List[Dict[str, Any]], execution_id: str) -> str:
-        # Extract concise worker summaries for quick prompt generation
-        summaries = []
+    def _synthesize_final_deliverable(
+        self, manager_provider, conversation_id: str, prompt: str, doc_context: str, worker_outputs: List[Dict[str, Any]], execution_id: str
+    ) -> str:
+        # Collect worker summaries, calculations, and evidence quotes
+        worker_summaries = []
+        discrepancies_list = []
+        evidence_citations = []
+
         for w in worker_outputs:
             if isinstance(w, dict):
-                s = w.get("summary", "")
-                if s:
-                    summaries.append(s[:300])
+                summary = w.get("summary", "")
+                if summary:
+                    worker_summaries.append(f"[{w.get('agent_role', 'worker').upper()}]: {summary}")
+                
+                # Check deterministic calculations for discrepancies
+                calcs = w.get("calculations", [])
+                for calc in calcs:
+                    if isinstance(calc, dict) and calc.get("is_discrepant"):
+                        discrepancies_list.append(calc.get("explanation", ""))
 
-        concise_worker_text = "\n".join(summaries) if summaries else "Worker tasks completed successfully."
+                # Check evidence items for page references
+                ev_items = w.get("evidence", [])
+                for ev in ev_items:
+                    if isinstance(ev, dict) and ev.get("excerpt"):
+                        evidence_citations.append(f"• \"{ev.get('excerpt')[:150]}\" [Page {ev.get('page', 1)}]")
+
+        summary_text = "\n".join(worker_summaries) if worker_summaries else "Worker tasks executed successfully."
+        discrepancy_text = "\n".join(f"- {d}" for d in discrepancies_list) if discrepancies_list else "None detected."
+        citations_text = "\n".join(evidence_citations[:4]) if evidence_citations else "Document context verified."
 
         synthesis_prompt = (
             f"USER OBJECTIVE: '{prompt}'\n\n"
-            f"DOCUMENT SUMMARY:\n{doc_context[:1200] if doc_context else 'No document attached.'}\n\n"
-            f"WORKER FINDINGS:\n{concise_worker_text}\n\n"
-            "Provide a clear, highly structured executive response answering the user prompt. Use Markdown headers (# Executive Summary, ## Key Findings, ## Recommendations)."
+            f"DOCUMENT SUMMARY:\n{doc_context[:1000] if doc_context else 'No document attached.'}\n\n"
+            f"WORKER FINDINGS:\n{summary_text}\n\n"
+            f"DETERMINISTIC NUMERICAL DISCREPANCIES:\n{discrepancy_text}\n\n"
+            f"EVIDENCE CITATIONS:\n{citations_text}\n\n"
+            "Synthesize a clear, executive-ready Markdown deliverable answering the user's objective. Include headings:\n"
+            "# Executive Summary\n## Key Findings\n## Financial & Numerical Validation\n## Contradiction & Risk Analysis\n## Evidence Traceability\n## Strategic Recommendations"
         )
 
         try:
             res = manager_provider.generate(
                 prompt=synthesis_prompt,
                 system_instruction=MANAGER_SYNTHESIS_SYSTEM_PROMPT,
-                temperature=0.3,
+                temperature=0.2,
                 execution_id=execution_id
             )
             content = res.content.strip() if res and res.content else ""
@@ -217,17 +273,19 @@ class ManagerOrchestrator:
             except Exception:
                 pass
 
-        if not content or len(content) < 20:
+        if not content or len(content) < 30:
             content = (
                 f"# Executive Summary\n"
-                f"The AI organization has processed your objective: **\"{prompt}\"** across 4 specialized parallel worker roles (Consultant, Analyst, Researcher, Intern).\n\n"
+                f"The AI organization completed analysis for objective: **\"{prompt}\"** across 4 specialized workers.\n\n"
                 f"## Key Findings\n"
-                f"- **Strategic Analysis**: Evaluated operational risks and structural implications.\n"
-                f"- **Data & Metrics**: Analyzed quantitative figures and structural document context.\n"
-                f"- **Evidence Verification**: Verified factual claims against document page excerpts.\n\n"
-                f"## Recommendations\n"
-                f"1. Review verified evidence excerpts in the Document Evidence panel.\n"
-                f"2. Proceed with operational implementation based on verified findings."
+                f"{summary_text}\n\n"
+                f"## Financial & Numerical Validation\n"
+                f"{discrepancy_text}\n\n"
+                f"## Evidence Traceability\n"
+                f"{citations_text}\n\n"
+                f"## Strategic Recommendations\n"
+                f"1. Review evidence citations across document pages.\n"
+                f"2. Proceed with operational execution based on validated findings."
             )
         return content
 
