@@ -3,42 +3,54 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #111111;
-  --color-panel: #333333;
-  --color-border: #555555;
-  --color-muted: #777777;
-  --color-secondary: #999999;
-  --color-primary: #FFFFFF;
+  --bg-app: #121619;
+  --bg-sidebar: #171C20;
+  --bg-card: #1C2226;
+  --bg-card-alt: #242B30;
+  --border-card: #313A40;
+  --border-muted: #272F35;
+  --text-primary: #F3F4F6;
+  --text-secondary: #9DA8B0;
+  --text-muted: #6B7780;
 
   --status-success: #5F8F72;
-  --status-success-light: #7FAF91;
+  --status-success-text: #7FAF91;
   --status-error: #8F6666;
-  --status-error-light: #A47A7A;
+  --status-error-text: #A47A7A;
 }
 
 body {
-  color: var(--color-primary);
-  background-color: var(--color-bg);
+  color: var(--text-primary);
+  background-color: var(--bg-app);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 1; }
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-@keyframes float-paper {
-  0% { transform: translateY(0px); opacity: 0.9; }
-  50% { transform: translateY(-4px); opacity: 1; }
-  100% { transform: translateY(0px); opacity: 0.9; }
+::-webkit-scrollbar-track {
+  background: #171C20;
 }
 
-.animate-pulse-subtle {
-  animation: pulse-subtle 3s ease-in-out infinite;
+::-webkit-scrollbar-thumb {
+  background: #313A40;
+  border-radius: 9999px;
 }
 
-.animate-float-paper {
-  animation: float-paper 2.5s ease-in-out infinite;
+::-webkit-scrollbar-thumb:hover {
+  background: #4A5660;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
 }

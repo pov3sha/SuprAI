@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight, Terminal } from 'lucide-react';
+import { Activity, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import { SSEEvent } from '../lib/types';
 
 interface LiveFeedProps {
@@ -13,107 +13,101 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
   const getEventTitle = (event: SSEEvent) => {
     switch (event.event_type) {
       case 'manager_started':
-        return 'Task received by Lead Manager';
+        return 'Task received from user';
       case 'manager_planning':
-        return 'Manager analyzing objective & document chunks';
+        return 'Manager analyzing objective';
       case 'task_created':
-        return `Subtask created: ${event.payload?.objective || 'Agent Task'}`;
+        return `${event.payload?.role ? event.payload.role.charAt(0).toUpperCase() + event.payload.role.slice(1) : 'Worker'} subtask created`;
       case 'agent_assigned':
-        return `Assigned ${event.payload?.agent_name || 'Agent'} to subtask`;
+        return `${event.payload?.agent_name || 'Worker'} assigned`;
       case 'agent_started':
-        return `${event.payload?.agent_name || 'Agent'} started processing`;
+        return `${event.payload?.agent_name || 'Worker'} started processing`;
       case 'agent_question':
-        return `${event.payload?.agent_name || 'Agent'} → Manager: "${event.payload?.question || 'Clarification request'}"`;
+        return `${event.payload?.agent_name || 'Worker'} asked clarification`;
       case 'manager_clarification':
-        return `Manager → ${event.payload?.target || 'Agent'}: "${event.payload?.response || 'Strategic guidance'}"`;
+        return `Manager provided clarification`;
       case 'agent_acknowledged':
-        return `${event.payload?.agent_name || 'Agent'}: Clarification received`;
+        return `${event.payload?.agent_name || 'Worker'} acknowledged`;
       case 'document_reading':
-        return `${event.payload?.agent_name || 'Agent'} reading ${event.payload?.filename || 'document'} (Page ${event.payload?.page || 1})`;
+        return `${event.payload?.agent_name || 'Worker'} extracting data`;
       case 'evidence_created':
-        return `Evidence verified from ${event.payload?.document_name || 'document'} (Page ${event.payload?.page || 1})`;
+        return `Evidence verified (Page ${event.payload?.page || 1})`;
       case 'agent_completed':
-        return `${event.payload?.agent_name || 'Agent'} task completed`;
+        return `${event.payload?.agent_name || 'Worker'} task completed`;
       case 'manager_reviewing':
-        return 'Manager reviewing worker findings';
+        return 'Manager reviewing results';
       case 'manager_synthesizing':
-        return 'Manager synthesizing final deliverable report';
+        return 'Manager synthesizing report';
       case 'execution_completed':
         return 'Execution completed successfully';
       case 'execution_failed':
         return `Execution failed: ${event.payload?.error || 'Error occurred'}`;
       default:
-        return event.event_type.replace(/_/g, ' ').toUpperCase();
+        return event.event_type.replace(/_/g, ' ');
     }
   };
 
   return (
-    <div className="w-full bg-[#333333] border border-[#555555] rounded overflow-hidden flex flex-col text-xs text-[#FFFFFF] font-sans">
+    <aside className="w-80 border-l border-[#313A40] bg-[#171C20] flex flex-col h-[calc(100vh-3.5rem)] text-[#F3F4F6] select-none shrink-0 font-sans">
       {/* Header */}
-      <div className="px-3 py-2 bg-[#111111] border-b border-[#555555] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#999999]" />
-          <h4 className="font-bold text-[#FFFFFF] tracking-wide text-xs">Execution Lifecycle Stream</h4>
+      <div className="p-4 border-b border-[#313A40] flex items-center justify-between">
+        <div>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#F3F4F6]">EXECUTION TIMELINE</h4>
+          <p className="text-[10px] text-[#6B7780]">Real-time lifecycle stream</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-            className="flex items-center gap-1 text-[10px] text-[#999999] hover:text-[#FFFFFF] transition font-mono px-2 py-0.5 rounded bg-[#333333] border border-[#555555]"
-          >
-            <Terminal className="w-3 h-3 text-[#999999]" />
-            {showTechnicalDetails ? 'Hide JSON' : 'JSON'}
-            {showTechnicalDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          </button>
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#7FAF91]' : 'bg-[#A47A7A]'}`} />
-        </div>
+
+        <button
+          onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+          className="flex items-center gap-1 text-[10px] text-[#9DA8B0] hover:text-[#F3F4F6] transition font-mono px-2.5 py-1 rounded-xl bg-[#242B30] border border-[#313A40]"
+        >
+          <Zap className="w-3 h-3 text-[#9DA8B0]" />
+          <span>JSON</span>
+        </button>
       </div>
 
-      {/* Timeline List */}
-      <div className="p-3 max-h-[calc(100vh-10rem)] overflow-y-auto space-y-2.5 scrollbar-thin">
+      {/* Timeline Stream */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2.5 scrollbar-thin">
         {events.length === 0 ? (
-          <div className="py-6 text-center text-[#777777] flex flex-col items-center gap-2">
-            <Clock className="w-5 h-5 stroke-1 text-[#555555]" />
-            <span className="text-[11px]">Awaiting execution lifecycle events...</span>
+          <div className="py-8 text-center text-[#6B7780] flex flex-col items-center gap-2">
+            <Clock className="w-6 h-6 stroke-1 text-[#313A40]" />
+            <span className="text-xs">Awaiting execution lifecycle events...</span>
           </div>
         ) : (
           events.map((ev, index) => {
-            const isCompleted = ev.event_type === 'execution_completed' || ev.event_type === 'agent_completed';
+            const isCompleted = ev.event_type === 'execution_completed' || ev.event_type === 'agent_completed' || ev.event_type === 'evidence_created' || ev.event_type === 'agent_acknowledged';
             const isFailed = ev.event_type === 'execution_failed' || ev.event_type === 'agent_failed';
 
+            const timeStr = ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleTimeString() : '18:58:26';
+
             return (
-              <div key={index} className="flex items-start gap-2 text-[11px]">
-                <div className="mt-0.5 shrink-0">
-                  {isCompleted ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-[#7FAF91]" />
-                  ) : isFailed ? (
-                    <AlertCircle className="w-3.5 h-3.5 text-[#A47A7A]" />
-                  ) : (
-                    <span className="w-3.5 h-3.5 rounded-full border border-[#999999] bg-[#111111] flex items-center justify-center text-[8px] text-[#999999] font-mono">
-                      ●
-                    </span>
-                  )}
+              <div key={index} className="flex items-center justify-between gap-2 text-xs font-mono">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-[10px] text-[#6B7780] shrink-0">{timeStr}</span>
+                  <span className="shrink-0">
+                    {isCompleted ? (
+                      <CheckCircle className="w-3.5 h-3.5 text-[#7FAF91]" />
+                    ) : isFailed ? (
+                      <AlertCircle className="w-3.5 h-3.5 text-[#A47A7A]" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full border border-[#6B7780] inline-block" />
+                    )}
+                  </span>
+                  <span className={`truncate text-[11px] font-sans ${isCompleted ? 'text-[#7FAF91] font-semibold' : isFailed ? 'text-[#A47A7A] font-semibold' : 'text-[#F3F4F6]'}`}>
+                    {getEventTitle(ev)}
+                  </span>
                 </div>
 
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between text-[#FFFFFF]">
-                    <span className="font-semibold text-[11px] leading-tight">{getEventTitle(ev)}</span>
-                    <span className="text-[9px] font-mono text-[#777777] shrink-0 ml-1">
-                      {new Date((ev.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}
-                    </span>
-                  </div>
-
-                  {/* Technical JSON Details */}
-                  {showTechnicalDetails && (
-                    <pre className="p-2 rounded bg-[#111111] border border-[#555555] font-mono text-[9px] text-[#999999] overflow-x-auto">
-                      {JSON.stringify(ev.payload, null, 2)}
-                    </pre>
-                  )}
-                </div>
+                {/* Technical JSON Details */}
+                {showTechnicalDetails && (
+                  <pre className="p-2 rounded-xl bg-[#121619] border border-[#313A40] font-mono text-[9px] text-[#9DA8B0] overflow-x-auto w-full mt-1">
+                    {JSON.stringify(ev.payload, null, 2)}
+                  </pre>
+                )}
               </div>
             );
           })
         )}
       </div>
-    </div>
+    </aside>
   );
 };
