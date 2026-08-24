@@ -43,6 +43,9 @@ export default function DashboardPage() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
 
+  // Real-time SSE Stream Listener
+  const { events, isConnected, clearEvents } = useSSE(conversationId);
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -60,6 +63,7 @@ export default function DashboardPage() {
         setMessages([]);
         setTasks([]);
         setEvidenceList([]);
+        clearEvents();
       }
     } catch (e) {
       console.error('Failed to load projects:', e);
@@ -68,6 +72,11 @@ export default function DashboardPage() {
 
   const selectProject = async (proj: Project) => {
     setActiveProject(proj);
+    setMessages([]);
+    setTasks([]);
+    setEvidenceList([]);
+    clearEvents();
+
     loadProjectFiles(proj.id);
     if (proj.default_conversation_id) {
       setConversationId(proj.default_conversation_id);
@@ -106,6 +115,12 @@ export default function DashboardPage() {
 
   const handleCreateProject = async (name: string, description?: string) => {
     try {
+      // Clear current workspace & timeline for new project creation
+      setMessages([]);
+      setTasks([]);
+      setEvidenceList([]);
+      clearEvents();
+
       const newProj = await createProject(name, description);
       setProjects((prev) => [newProj, ...prev]);
       selectProject(newProj);
@@ -129,6 +144,7 @@ export default function DashboardPage() {
           setMessages([]);
           setTasks([]);
           setEvidenceList([]);
+          clearEvents();
         }
       }
     } catch (e) {
@@ -146,6 +162,7 @@ export default function DashboardPage() {
       setMessages([]);
       setTasks([]);
       setEvidenceList([]);
+      clearEvents();
       setIsProcessing(false);
     } catch (e) {
       console.error('Failed to clear workspace:', e);
@@ -156,6 +173,7 @@ export default function DashboardPage() {
     setMessages([]);
     setTasks([]);
     setEvidenceList([]);
+    clearEvents();
     setIsProcessing(false);
   };
 
@@ -203,9 +221,6 @@ export default function DashboardPage() {
       setIsProcessing(false);
     }
   };
-
-  // Real-time SSE Stream Listener
-  const { events, isConnected } = useSSE(conversationId);
 
   useEffect(() => {
     if (!events.length || !conversationId) return;
@@ -309,6 +324,7 @@ export default function DashboardPage() {
               isConnected={isConnected}
               isCollapsed={isRightCollapsed}
               onToggleCollapse={() => setIsRightCollapsed(!isRightCollapsed)}
+              onClearTimeline={clearEvents}
             />
           </>
         ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { SSEEvent } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
@@ -7,7 +7,13 @@ export function useSSE(conversationId: string | null) {
   const [events, setEvents] = useState<SSEEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
+  const clearEvents = useCallback(() => {
+    setEvents([]);
+  }, []);
+
   useEffect(() => {
+    // Reset events on conversation switch
+    setEvents([]);
     if (!conversationId) return;
 
     const eventSource = new EventSource(`${API_BASE}/conversations/${conversationId}/events`);
@@ -41,6 +47,10 @@ export function useSSE(conversationId: string | null) {
       'task_created',
       'agent_assigned',
       'agent_started',
+      'agent_question',
+      'manager_clarification',
+      'agent_acknowledged',
+      'document_reading',
       'agent_completed',
       'agent_failed',
       'evidence_created',
@@ -60,5 +70,5 @@ export function useSSE(conversationId: string | null) {
     };
   }, [conversationId]);
 
-  return { events, isConnected };
+  return { events, isConnected, clearEvents };
 }

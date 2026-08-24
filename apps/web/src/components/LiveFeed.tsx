@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, CheckCircle, Clock, AlertCircle, Zap, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Activity, CheckCircle, Clock, AlertCircle, Zap, ChevronRight, ChevronLeft, Trash2 } from 'lucide-react';
 import { SSEEvent } from '../lib/types';
 
 interface LiveFeedProps {
@@ -7,9 +7,16 @@ interface LiveFeedProps {
   isConnected: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onClearTimeline?: () => void;
 }
 
-export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected, isCollapsed = false, onToggleCollapse }) => {
+export const LiveFeed: React.FC<LiveFeedProps> = ({
+  events,
+  isConnected,
+  isCollapsed = false,
+  onToggleCollapse,
+  onClearTimeline,
+}) => {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   const getEventTitle = (event: SSEEvent) => {
@@ -64,7 +71,16 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected, isColla
               <p className="text-[10px] text-[#6B7780]">Real-time lifecycle stream</p>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              {onClearTimeline && events.length > 0 && (
+                <button
+                  onClick={onClearTimeline}
+                  className="p-1 rounded-xl bg-[#242B30] border border-[#313A40] text-[#A47A7A] hover:text-[#F3F4F6] transition cursor-pointer"
+                  title="Clear Timeline"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
                 className="flex items-center gap-1 text-[10px] text-[#9DA8B0] hover:text-[#F3F4F6] transition font-mono px-2 py-0.5 rounded-xl bg-[#242B30] border border-[#313A40]"
