@@ -248,7 +248,7 @@ export default function DashboardPage() {
   const activeDocName = files.length > 0 ? files[0].filename : undefined;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#11161B] text-white">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#202629] text-[#F3F4F6]">
       <Header />
 
       <div className="flex flex-1 overflow-hidden">
@@ -271,7 +271,7 @@ export default function DashboardPage() {
 
         {/* Center Main Execution Command Center */}
         {activeNav === 'dashboard' && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
             <AIOrgCommandCenter
               tasks={tasks}
               isProcessing={isProcessing}
@@ -322,7 +322,7 @@ export default function DashboardPage() {
         {activeNav === 'activity' && <ActivityView events={events} />}
 
         {/* Right Execution Timeline Panel */}
-        <div className="w-80 border-l border-[#2D3945] bg-[#11161B] p-4 flex flex-col h-[calc(100vh-3.5rem)] shrink-0 overflow-y-auto">
+        <div className="w-80 border-l border-[#5E666D] bg-[#202629] p-4 flex flex-col h-[calc(100vh-3.5rem)] shrink-0 overflow-y-auto">
           <LiveFeed events={events} isConnected={isConnected} />
         </div>
       </div>

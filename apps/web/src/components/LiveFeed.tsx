@@ -42,17 +42,17 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
   };
 
   return (
-    <div className="w-full bg-[#1B242C] border border-[#2D3945] rounded-xl overflow-hidden flex flex-col text-xs text-white">
+    <div className="w-full bg-[#2D3439] border border-[#5E666D] rounded-xl overflow-hidden flex flex-col text-xs text-white">
       {/* Header */}
-      <div className="px-4 py-3 bg-[#11161B] border-b border-[#2D3945] flex items-center justify-between">
+      <div className="px-4 py-3 bg-[#202629] border-b border-[#5E666D] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-[#6366F1]" />
-          <h4 className="font-bold text-[#F1F5F9] tracking-wide">Real-Time Execution Timeline</h4>
+          <h4 className="font-bold text-[#F3F4F6] tracking-wide">Real-Time Execution Timeline</h4>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-            className="flex items-center gap-1 text-[11px] text-[#A3ACB3] hover:text-white transition font-mono px-2 py-0.5 rounded bg-[#1B242C] border border-[#2D3945]"
+            className="flex items-center gap-1 text-[11px] text-[#A9A8AD] hover:text-white transition font-mono px-2 py-0.5 rounded bg-[#2D3439] border border-[#5E666D]"
           >
             <Terminal className="w-3 h-3 text-[#6366F1]" />
             {showTechnicalDetails ? 'Hide JSON Events' : 'Show JSON Events'}
@@ -65,8 +65,8 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
       {/* Timeline List */}
       <div className="p-4 max-h-72 overflow-y-auto space-y-3 font-sans scrollbar-thin">
         {events.length === 0 ? (
-          <div className="py-6 text-center text-[#5A6A78] flex flex-col items-center gap-2">
-            <Clock className="w-6 h-6 stroke-1 text-[#2D3945]" />
+          <div className="py-6 text-center text-[#848589] flex flex-col items-center gap-2">
+            <Clock className="w-6 h-6 stroke-1 text-[#5E666D]" />
             <span>Awaiting execution stream events...</span>
           </div>
         ) : (
@@ -89,16 +89,16 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ events, isConnected }) => {
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between text-[#F1F5F9]">
+                  <div className="flex items-center justify-between text-[#F3F4F6]">
                     <span className="font-semibold">{getEventTitle(ev)}</span>
-                    <span className="text-[9.5px] font-mono text-[#5A6A78]">
+                    <span className="text-[9.5px] font-mono text-[#848589]">
                       {new Date((ev.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}
                     </span>
                   </div>
 
                   {/* Technical JSON Payload Details */}
                   {showTechnicalDetails && (
-                    <pre className="p-2 rounded bg-[#11161B] border border-[#2D3945] font-mono text-[9.5px] text-[#A3ACB3] overflow-x-auto">
+                    <pre className="p-2 rounded bg-[#202629] border border-[#5E666D] font-mono text-[9.5px] text-[#A9A8AD] overflow-x-auto">
                       {JSON.stringify(ev.payload, null, 2)}
                     </pre>
                   )}

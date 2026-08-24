@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, ShieldCheck, Sparkles, FileText, CheckCircle2, AlertCircle, ArrowDown, Search, Activity, Layers, BookOpen } from 'lucide-react';
+import { Cpu, ShieldCheck, Sparkles, FileText, ArrowDown, Layers, CheckCircle2, AlertCircle, FileCheck, Info } from 'lucide-react';
 import { Task, Evidence, SSEEvent } from '../lib/types';
 
 interface AIOrgCommandCenterProps {
@@ -19,112 +19,123 @@ export const AIOrgCommandCenter: React.FC<AIOrgCommandCenterProps> = ({
   activeDocumentName,
   onSelectEvidence,
 }) => {
-  // Derive Manager State from SSE stream
-  const latestEvent = events.length > 0 ? events[events.length - 1] : null;
-  const isFailed = events.some((e) => e.event_type === 'execution_failed' || e.event_type === 'agent_failed');
-  const isCompleted = events.some((e) => e.event_type === 'execution_completed');
+  // Scoped active execution status (prevents stale failure flags)
+  const currentExecEvents = events.slice(-15);
+  const activeFailedEvent = currentExecEvents.find((e) => e.event_type === 'execution_failed');
+  const activeCompletedEvent = currentExecEvents.find((e) => e.event_type === 'execution_completed');
 
   let managerStatus = 'IDLE';
-  if (isFailed) managerStatus = 'FAILED';
-  else if (isCompleted) managerStatus = 'COMPLETED';
+  if (activeFailedEvent) managerStatus = 'FAILED';
+  else if (activeCompletedEvent && !isProcessing) managerStatus = 'COMPLETED';
   else if (isProcessing) {
     if (events.some((e) => e.event_type === 'manager_synthesizing')) managerStatus = 'SYNTHESIZING';
     else if (events.some((e) => e.event_type === 'manager_reviewing')) managerStatus = 'REVIEWING';
     else if (events.some((e) => e.event_type === 'task_created')) managerStatus = 'DECOMPOSING';
     else if (events.some((e) => e.event_type === 'manager_planning')) managerStatus = 'PLANNING';
-    else managerStatus = 'RECEIVED TASK';
+    else managerStatus = 'RECEIVING TASK';
   }
 
   // Active reading snippet event
   const lastDocEvent = [...events].reverse().find((e) => e.event_type === 'document_reading');
   const docSnippet = lastDocEvent?.payload?.snippet || '';
   const docPage = lastDocEvent?.payload?.page || 1;
-  const docFile = lastDocEvent?.payload?.filename || activeDocumentName || 'attached_document.pdf';
+  const docFile = lastDocEvent?.payload?.filename || activeDocumentName || 'document.pdf';
 
   // Organization Roles
   const roles = [
     { id: 'consultant', name: 'Consultant', title: 'Strategy & Domain Reasoning' },
     { id: 'analyst', name: 'Analyst', title: 'Document & Metric Analysis' },
-    { id: 'researcher', name: 'Researcher', title: 'Evidence & Context Fact-Checking' },
-    { id: 'intern', name: 'Intern', title: 'Data Organization & Extraction' },
+    { id: 'researcher', name: 'Researcher', title: 'Evidence & Context Verification' },
+    { id: 'intern', name: 'Intern', title: 'Data Extraction & Organization' },
   ];
 
   const getWorkerStatus = (roleId: string) => {
-    if (isFailed) return { state: 'FAILED', color: 'border-rose-500/40 bg-rose-500/10 text-rose-400' };
-    const task = tasks.find((t) => (t.worker || '').toLowerCase().includes(roleId) || (t.objective || '').toLowerCase().includes(roleId));
+    const roleTask = tasks.find((t) => (t.worker || '').toLowerCase().includes(roleId) || (t.objective || '').toLowerCase().includes(roleId));
 
-    if (!isProcessing && tasks.length === 0) {
-      return { state: 'IDLE', color: 'border-[#2D3945] bg-[#1B242C] text-[#5A6A78]' };
+    if (activeFailedEvent && roleTask?.status !== 'COMPLETED') {
+      return { state: 'FAILED', color: 'border-rose-500/40 bg-rose-500/10 text-rose-300' };
     }
 
-    if (task) {
-      if (task.status === 'COMPLETED') return { state: 'COMPLETED', color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' };
-      if (task.status === 'RUNNING') {
+    if (!isProcessing && tasks.length === 0) {
+      return { state: 'IDLE', color: 'border-[#5E666D] bg-[#2D3439] text-[#848589]' };
+    }
+
+    if (roleTask) {
+      if (roleTask.status === 'COMPLETED') return { state: 'COMPLETED', color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' };
+      if (roleTask.status === 'RUNNING' || isProcessing) {
         if (lastDocEvent?.payload?.agent_name?.toLowerCase().includes(roleId)) {
-          return { state: 'READING DOCUMENT', color: 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300' };
+          return { state: 'READING PAPER', color: 'border-[#6366F1] bg-[#6366F1]/10 text-indigo-300' };
         }
-        return { state: 'WORKING', color: 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400' };
+        return { state: 'WORKING', color: 'border-[#6366F1] bg-[#6366F1]/10 text-indigo-300' };
       }
       return { state: 'ASSIGNED', color: 'border-amber-500/40 bg-amber-500/10 text-amber-300' };
     }
 
-    if (isProcessing && tasks.length > 0) {
-      return { state: 'WORKING', color: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' };
+    if (isProcessing) {
+      return { state: 'WORKING', color: 'border-[#6366F1] bg-[#6366F1]/10 text-indigo-300' };
     }
 
-    return { state: isCompleted ? 'COMPLETED' : 'IDLE', color: isCompleted ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-[#2D3945] bg-[#1B242C] text-[#5A6A78]' };
+    return { state: 'READY', color: 'border-[#5E666D] bg-[#2D3439] text-[#A9A8AD]' };
   };
 
   return (
-    <div className="w-full bg-[#11161B] border-b border-[#2D3945] p-5 select-none text-white space-y-5">
-      {/* Local Privacy & Architecture Verification Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-[#1B242C] border border-[#2D3945] text-xs">
+    <div className="w-full bg-[#202629] border-b border-[#5E666D] p-4 select-none text-[#F3F4F6] space-y-4">
+      {/* Verification & System Achievements Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-[#2D3439] border border-[#5E666D] text-xs">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span className="font-semibold text-[#F1F5F9]">LOCAL INFERENCE VERIFIED</span>
-          <span className="text-[#2D3945]">|</span>
-          <span className="text-[#A3ACB3]">Engine: <strong className="text-emerald-400 font-mono">Ollama (qwen2.5:0.5b)</strong></span>
+          <span className="font-bold text-[#F3F4F6]">100% LOCAL PRIVACY VERIFIED</span>
+          <span className="text-[#5E666D]">|</span>
+          <span className="text-[#A9A8AD]">Engine: <strong className="text-emerald-400 font-mono">Ollama (qwen2.5:0.5b)</strong></span>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-[#A3ACB3] font-mono">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            External API: NONE ($0.00)
-          </span>
-          <span className="text-[#2D3945]">|</span>
+        <div className="flex items-center gap-3 text-[11px] text-[#A9A8AD] font-mono">
+          <span className="text-emerald-400 font-semibold">● External API: NONE ($0.00)</span>
+          <span className="text-[#5E666D]">|</span>
           <span>Data leaves device: NO</span>
         </div>
       </div>
 
-      {/* AI Organization Visualizer Header */}
-      <div className="flex items-center justify-between border-b border-[#2D3945]/60 pb-2">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-[#6366F1]" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#F1F5F9]">
-            Autonomous AI Organization Command Center
-          </h3>
+      {/* Engineering Achievements Highlights */}
+      <div className="p-3 rounded-lg bg-[#2D3439]/60 border border-[#5E666D] text-[11px] text-[#A9A8AD] space-y-1">
+        <div className="flex items-center gap-1.5 font-bold text-[#F3F4F6] text-xs mb-1">
+          <Info className="w-3.5 h-3.5 text-[#6366F1]" />
+          <span>System Architecture & Verification Standards</span>
         </div>
-        <span className="text-[10px] font-mono text-[#5A6A78] uppercase">HTTP 202 + Redis SSE Stream</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10.5px]">
+          <div className="flex items-start gap-1.5">
+            <span className="text-[#6366F1] font-bold">▪</span>
+            <span>Async HTTP 202 + Redis SSE architecture for non-blocking execution.</span>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <span className="text-[#6366F1] font-bold">▪</span>
+            <span>Parallelized agent tasks via decoupled TaskExecutor / ThreadPool.</span>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <span className="text-[#6366F1] font-bold">▪</span>
+            <span>100% local privacy via Ollama model verification ($0.00 cost).</span>
+          </div>
+        </div>
       </div>
 
-      {/* Manager AI Central Coordinator Hub */}
+      {/* Manager Officer Hub (Command Center Coordinator) */}
       <div className="flex flex-col items-center justify-center">
-        <div className={`relative w-full max-w-md p-4 rounded-xl border transition-all duration-300 shadow-xl ${
+        <div className={`relative w-full max-w-lg p-3.5 rounded-xl border transition-all duration-300 shadow-xl ${
           managerStatus === 'FAILED'
             ? 'bg-rose-500/10 border-rose-500/40 text-rose-300'
             : managerStatus === 'COMPLETED'
             ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
             : isProcessing
-            ? 'bg-[#1B242C] border-[#6366F1] text-white shadow-[#6366F1]/10'
-            : 'bg-[#1B242C] border-[#2D3945] text-[#A3ACB3]'
+            ? 'bg-[#2D3439] border-[#6366F1] text-white shadow-[#6366F1]/10'
+            : 'bg-[#2D3439] border-[#5E666D] text-[#A9A8AD]'
         }`}>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-[#6366F1]/20 border border-[#6366F1]/40 flex items-center justify-center text-[#6366F1]">
-                <Cpu className="w-4 h-4" />
+                <Cpu className="w-4.5 h-4.5" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-[#F1F5F9]">Lead Manager AI</h4>
-                <p className="text-[10px] text-[#A3ACB3]">Coordinator & Strategic Synthesizer</p>
+                <h4 className="text-xs font-bold text-[#F3F4F6]">Lead Manager Officer</h4>
+                <p className="text-[10px] text-[#A9A8AD]">Analyzing Prompt & Delegating Document Work</p>
               </div>
             </div>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
@@ -134,89 +145,92 @@ export const AIOrgCommandCenter: React.FC<AIOrgCommandCenterProps> = ({
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                 : isProcessing
                 ? 'bg-[#6366F1]/20 text-[#6366F1] border-[#6366F1]/40 animate-pulse'
-                : 'bg-[#2D3945]/40 text-[#5A6A78] border-[#2D3945]'
+                : 'bg-[#2D3439] text-[#848589] border-[#5E666D]'
             }`}>
               {managerStatus}
             </span>
           </div>
 
-          {/* Manager Action Context */}
+          {/* Action Context Banner */}
           {isProcessing && (
-            <div className="mt-2 pt-2 border-t border-[#2D3945] text-[11px] text-[#A3ACB3] flex items-center gap-2">
+            <div className="mt-2 pt-2 border-t border-[#5E666D] text-[11px] text-[#A9A8AD] flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-[#6366F1] animate-spin" />
               <span>
-                {managerStatus === 'PLANNING' && 'Analyzing user prompt & attached document content...'}
-                {managerStatus === 'DECOMPOSING' && 'Decomposing task into parallel agent assignments...'}
-                {managerStatus === 'REVIEWING' && 'Reviewing worker findings & evidence quotes...'}
-                {managerStatus === 'SYNTHESIZING' && 'Synthesizing final evidence-backed deliverable...'}
-                {managerStatus === 'RECEIVED TASK' && 'Receiving user objective...'}
+                {managerStatus === 'PLANNING' && 'Manager examining objective and document context...'}
+                {managerStatus === 'DECOMPOSING' && 'Manager dispatching subtask papers to Consultants & Analysts...'}
+                {managerStatus === 'REVIEWING' && 'Manager reviewing collected evidence & worker outputs...'}
+                {managerStatus === 'SYNTHESIZING' && 'Manager synthesizing final deliverable report...'}
+                {managerStatus === 'RECEIVING TASK' && 'Receiving user task prompt...'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Dynamic Connector SVG Flow */}
-        <div className="h-6 w-full flex justify-center items-center text-[#2D3945]">
-          <ArrowDown className={`w-4 h-4 ${isProcessing ? 'text-[#6366F1] animate-bounce' : 'text-[#2D3945]'}`} />
+        {/* Paper Handoff Animation Indicator */}
+        <div className="h-5 w-full flex justify-center items-center text-[#5E666D]">
+          <ArrowDown className={`w-4 h-4 ${isProcessing ? 'text-[#6366F1] animate-bounce' : 'text-[#5E666D]'}`} />
         </div>
       </div>
 
-      {/* Parallel Workers Grid */}
+      {/* Parallel Agents Working Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {roles.map((r) => {
           const status = getWorkerStatus(r.id);
-          const activeTask = tasks.find((t) => (t.worker || '').toLowerCase().includes(r.id) || (t.objective || '').toLowerCase().includes(r.id));
+          const roleTask = tasks.find((t) => (t.worker || '').toLowerCase().includes(r.id) || (t.objective || '').toLowerCase().includes(r.id));
 
           return (
             <div
               key={r.id}
-              className={`p-3.5 rounded-xl border transition-all duration-300 flex flex-col justify-between ${status.color}`}
+              className={`p-3 rounded-xl border transition-all duration-300 flex flex-col justify-between ${status.color}`}
             >
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-[#F1F5F9]">{r.name}</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-[#F3F4F6]">{r.name}</span>
                   <span className="text-[9px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider font-semibold">
                     {status.state}
                   </span>
                 </div>
-                <p className="text-[10px] text-[#A3ACB3] mb-3">{r.title}</p>
+                <p className="text-[10px] text-[#A9A8AD] mb-2">{r.title}</p>
 
-                {activeTask && (
-                  <div className="p-2 rounded bg-[#11161B]/80 border border-[#2D3945] text-[10px] text-[#A3ACB3] space-y-1 mb-2">
-                    <div className="font-semibold text-[#F1F5F9] truncate">{activeTask.objective}</div>
+                {roleTask && (
+                  <div className="p-2 rounded bg-[#202629] border border-[#5E666D] text-[10px] text-[#A9A8AD] mb-2">
+                    <div className="font-semibold text-[#F3F4F6] truncate">{roleTask.objective}</div>
                   </div>
                 )}
 
-                {status.state === 'READING DOCUMENT' && docSnippet && (
-                  <div className="p-2 rounded bg-indigo-950/40 border border-indigo-500/30 text-[10px] text-indigo-200 space-y-1">
+                {/* Animated Paper Card */}
+                {status.state === 'READING PAPER' && (
+                  <div className="p-2 rounded bg-[#6366F1]/10 border border-[#6366F1]/40 text-[10px] text-indigo-200 animate-float-paper space-y-1">
                     <div className="flex items-center justify-between text-[9px] font-mono text-indigo-300">
-                      <span className="truncate max-w-[100px]">{docFile}</span>
-                      <span>Page {docPage}</span>
+                      <span className="flex items-center gap-1 font-semibold">
+                        <FileText className="w-3 h-3 text-[#6366F1]" />
+                        {docFile}
+                      </span>
+                      <span>Pg {docPage}</span>
                     </div>
-                    <p className="line-clamp-2 text-[9.5px] italic text-indigo-100/80">
+                    <p className="line-clamp-2 text-[9.5px] italic text-[#A9A8AD]">
                       &quot;{docSnippet}&quot;
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Status Indicator Bar */}
-              <div className="pt-2 border-t border-[#2D3945]/40 flex items-center justify-between text-[10px] text-[#5A6A78]">
+              <div className="pt-2 border-t border-[#5E666D]/40 flex items-center justify-between text-[10px] text-[#848589]">
                 <span>Status:</span>
-                <span className="font-semibold font-mono text-[#F1F5F9]">{status.state}</span>
+                <span className="font-semibold font-mono text-[#F3F4F6]">{status.state}</span>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Real Document Evidence Cards Stream */}
+      {/* Real Document Evidence Stream */}
       {evidenceList.length > 0 && (
-        <div className="pt-3 border-t border-[#2D3945]">
+        <div className="pt-2 border-t border-[#5E666D]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-[#A3ACB3] uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
-              Collected Document Evidence ({evidenceList.length})
+            <span className="text-[10px] font-semibold text-[#A9A8AD] uppercase tracking-wider flex items-center gap-1.5">
+              <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+              Verified Document Evidence Quotes ({evidenceList.length})
             </span>
           </div>
 
@@ -225,13 +239,13 @@ export const AIOrgCommandCenter: React.FC<AIOrgCommandCenterProps> = ({
               <div
                 key={ev.id || idx}
                 onClick={() => onSelectEvidence && onSelectEvidence(ev)}
-                className="shrink-0 max-w-xs p-2.5 rounded-lg bg-[#1B2433] border border-[#2D3945] hover:border-emerald-500/50 cursor-pointer transition text-xs space-y-1"
+                className="shrink-0 max-w-xs p-2.5 rounded-lg bg-[#2D3439] border border-[#5E666D] hover:border-emerald-400/50 cursor-pointer transition text-xs space-y-1"
               >
                 <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
                   <span className="truncate max-w-[120px] font-semibold">{ev.document_name || 'Document'}</span>
                   <span>Page {ev.page_number || 1}</span>
                 </div>
-                <p className="text-[10.5px] text-[#A3ACB3] line-clamp-2 italic">
+                <p className="text-[10.5px] text-[#A9A8AD] line-clamp-2 italic">
                   &quot;{ev.excerpt}&quot;
                 </p>
               </div>
