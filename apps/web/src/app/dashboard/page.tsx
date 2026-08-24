@@ -262,6 +262,18 @@ export default function DashboardPage() {
       setIsProcessing(false);
       loadHistory(conversationId);
       if (latestEvent.event_type === 'execution_completed') {
+        const report = latestEvent.payload?.result?.report;
+        if (report) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `report_${Date.now()}`,
+              role: 'assistant',
+              content: report,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        }
         playPingSound();
       }
     }

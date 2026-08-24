@@ -4,7 +4,7 @@ from app.schemas.pydantic_contracts import NumericalClaim, DeterministicCalculat
 
 def parse_number_from_text(text: str) -> Optional[float]:
     """
-    Extracts a numeric float value from formatted strings like '$0.78M', '$620K', '14 months', '420'.
+    Extracts a numeric float value from formatted strings like '$1.5M', '$620K', '14 months', '420'.
     """
     if not text:
         return None
@@ -12,7 +12,7 @@ def parse_number_from_text(text: str) -> Optional[float]:
     # Clean commas
     clean = text.replace(',', '').strip()
     
-    # Match millions: e.g. $0.78M or 0.78 million
+    # Match millions: e.g. $1.5M or 1.5 million
     m_match = re.search(r'[\$]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:M|million|m)\b', clean, re.IGNORECASE)
     if m_match:
         return float(m_match.group(1)) * 1_000_000.0

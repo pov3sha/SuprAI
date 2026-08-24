@@ -18,7 +18,10 @@ def test_codebase_anti_hardcoding_audit():
         "19 months payback"
     ]
     
-    app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "apps", "api", "app"))
+    app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "app"))
+    if not os.path.exists(app_dir):
+        app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "apps", "api", "app"))
+
     py_files = glob.glob(os.path.join(app_dir, "**", "*.py"), recursive=True)
     
     violations = []
@@ -75,7 +78,25 @@ def test_deterministic_calculator_engine():
     assert var_calc.is_discrepant == True, "Expected discrepancy flag for 25.81% model variance!"
     print("PASS: Deterministic variance calculation verified.")
 
+def test_no_generic_completion_fallback_string():
+    """
+    Ensures that generic completion fallback string is strictly absent from orchestrator synthesis output.
+    """
+    print("\n--- TESTING NO GENERIC COMPLETION FALLBACK STRING ---")
+    generic_string = "completed analysis for objective"
+    app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "app"))
+    if not os.path.exists(app_dir):
+        app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "apps", "api", "app"))
+
+    orchestrator_path = os.path.join(app_dir, "services", "manager", "orchestrator.py")
+    
+    with open(orchestrator_path, 'r', encoding='utf-8') as f:
+        code = f.read()
+        assert generic_string not in code, "FAIL: Found generic status string in orchestrator.py synthesis!"
+    print("PASS: Generic status string strictly absent from orchestrator synthesis!")
+
 if __name__ == "__main__":
     test_codebase_anti_hardcoding_audit()
     test_deterministic_calculator_engine()
+    test_no_generic_completion_fallback_string()
     print("\nALL REASONING & ANTI-HARDCODING REGRESSION TESTS PASSED 100%!")

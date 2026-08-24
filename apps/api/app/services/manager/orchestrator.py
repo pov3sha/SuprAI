@@ -49,7 +49,7 @@ class ManagerOrchestrator:
         try:
             # 1. Instantiate Manager AI Provider (Local Ollama Engine)
             manager_provider = get_ai_provider(role_name="manager")
-            logger.info(f"Manager AI Provider initialized: {manager_provider.provider} ({manager_provider.model})")
+            logger.info(f"MANAGER_SYNTHESIS_STARTED execution_id={execution_id} provider={manager_provider.provider} ({manager_provider.model})")
 
             # 2. Store User Objective Message
             user_msg = Message(
@@ -66,9 +66,9 @@ class ManagerOrchestrator:
             for f_rec in files[:5]:
                 chunks = db.query(FileChunk).filter(FileChunk.file_id == f_rec.id).order_by(FileChunk.page_number).all()
                 doc_context_summary += f"\nDOCUMENT: {f_rec.filename} ({len(chunks)} pages)\n"
-                for chunk in chunks[:6]:
+                for chunk in chunks[:10]:
                     source_label = chunk.metadata_json.get("source_type", "page") if chunk.metadata_json else "page"
-                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:200]}\n"
+                    doc_context_summary += f"[{f_rec.filename}, {source_label} {chunk.page_number}]: {chunk.content[:400]}\n"
 
             # 4. DYNAMIC TASK DECOMPOSITION VIA OLLAMA (NO HARDCODING)
             event_publisher.publish_event(
@@ -80,7 +80,7 @@ class ManagerOrchestrator:
             # Generate dynamic task objectives tailored to the prompt & document
             decomp_prompt = (
                 f"USER OBJECTIVE: '{prompt}'\n"
-                f"DOCUMENT CONTEXT SUMMARY: {doc_context_summary[:600] if doc_context_summary else 'No document.'}\n"
+                f"DOCUMENT CONTEXT SUMMARY: {doc_context_summary[:1000] if doc_context_summary else 'No document.'}\n"
                 "Decompose this objective into 4 specific role-based subtasks:\n"
                 "1. consultant (strategy & risk)\n"
                 "2. analyst (quantitative & metrics)\n"
@@ -147,6 +147,9 @@ class ManagerOrchestrator:
             # Parallel Worker Execution via TaskExecutor Abstraction
             worker_outputs = task_executor.execute_tasks(created_tasks, db, execution_id)
 
+            if not worker_outputs or len(worker_outputs) == 0:
+                raise Exception("All worker execution tasks failed to return findings.")
+
             # Reviewing & Evidence Verification
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.WAITING_FOR_WORKERS, ExecutionState.REVIEWING, "Reviewing worker results")
             event_publisher.publish_event(
@@ -155,7 +158,7 @@ class ManagerOrchestrator:
                 payload={"execution_id": execution_id, "worker_count": len(worker_outputs)}
             )
 
-            # 5. CROSS-WORKER CONTRADICTION DETECTION & SYNTHESIS
+            # 5. CROSS-WORKER CONTRADICTION DETECTION & REAL MANAGER SYNTHESIS
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.REVIEWING, ExecutionState.SYNTHESIZING, "Synthesizing final deliverable")
             event_publisher.publish_event(
                 conversation_id=conversation_id,
@@ -163,11 +166,20 @@ class ManagerOrchestrator:
                 payload={"execution_id": execution_id}
             )
 
-            final_content = self._synthesize_final_deliverable(
+            synthesis_data = self._synthesize_final_deliverable(
                 manager_provider, conversation_id, prompt, doc_context_summary, worker_outputs, execution_id
             )
 
-            # Save Assistant Message & Transition to COMPLETED
+            final_content = synthesis_data.get("report", "")
+
+            # Strict Assertion: Ensure report synthesis is non-empty and valid deliverable
+            if not final_content or len(final_content) < 80:
+                logger.error(f"MANAGER_SYNTHESIS_FAILED execution_id={execution_id}: Synthesis generated no valid deliverable.")
+                raise Exception("Manager synthesis returned no valid deliverable report.")
+
+            logger.info(f"MANAGER_SYNTHESIS_COMPLETED execution_id={execution_id} report_length={len(final_content)} chars")
+
+            # Save Assistant Message
             elapsed_total = int((time.time() - start_time) * 1000)
             assistant_msg = Message(
                 conversation_id=conversation_id,
@@ -182,11 +194,25 @@ class ManagerOrchestrator:
             db.commit()
 
             self._publish_state_transition(conversation_id, execution_id, ExecutionState.SYNTHESIZING, ExecutionState.COMPLETED, "Execution completed successfully")
+            
+            # Emit execution_completed with REAL STRUCTURED DELIVERABLE payload
             event_publisher.publish_event(
                 conversation_id=conversation_id,
                 event_type="execution_completed",
-                payload={"execution_id": execution_id, "elapsed_ms": elapsed_total}
+                payload={
+                    "execution_id": execution_id,
+                    "status": "completed",
+                    "elapsed_ms": elapsed_total,
+                    "result": {
+                        "report": final_content,
+                        "evidence": synthesis_data.get("evidence", []),
+                        "numerical_validations": synthesis_data.get("numerical_validations", []),
+                        "contradictions": synthesis_data.get("contradictions", []),
+                        "worker_count": len(worker_outputs)
+                    }
+                }
             )
+            logger.info(f"EXECUTION_COMPLETED_EMITTED execution_id={execution_id} report_included=True report_length={len(final_content)}")
             return final_content
 
         except ConfigurationError as err:
@@ -202,44 +228,77 @@ class ManagerOrchestrator:
 
     def _synthesize_final_deliverable(
         self, manager_provider, conversation_id: str, prompt: str, doc_context: str, worker_outputs: List[Dict[str, Any]], execution_id: str
-    ) -> str:
-        # Collect worker summaries, calculations, and evidence quotes
+    ) -> Dict[str, Any]:
         worker_summaries = []
         discrepancies_list = []
         evidence_citations = []
+        structured_findings = []
+        all_evidence = []
+        all_calcs = []
+        all_contradictions = []
 
         for w in worker_outputs:
             if isinstance(w, dict):
                 summary = w.get("summary", "")
+                role = w.get("agent_role", "worker").upper()
                 if summary:
-                    worker_summaries.append(f"[{w.get('agent_role', 'worker').upper()}]: {summary}")
+                    worker_summaries.append(f"[{role}]: {summary}")
                 
+                # Findings
+                f_items = w.get("findings", [])
+                for f in f_items:
+                    if isinstance(f, dict):
+                        claim = f.get("claim", "")
+                        analysis = f.get("analysis", "")
+                        if claim or analysis:
+                            structured_findings.append(f"- **{claim}**: {analysis}")
+
                 # Check deterministic calculations for discrepancies
                 calcs = w.get("calculations", [])
                 for calc in calcs:
-                    if isinstance(calc, dict) and calc.get("is_discrepant"):
-                        discrepancies_list.append(calc.get("explanation", ""))
+                    if isinstance(calc, dict):
+                        all_calcs.append(calc)
+                        if calc.get("is_discrepant"):
+                            discrepancies_list.append(calc.get("explanation", ""))
 
                 # Check evidence items for page references
                 ev_items = w.get("evidence", [])
                 for ev in ev_items:
                     if isinstance(ev, dict) and ev.get("excerpt"):
-                        evidence_citations.append(f"• \"{ev.get('excerpt')[:150]}\" [Page {ev.get('page', 1)}]")
+                        all_evidence.append(ev)
+                        evidence_citations.append(f"• \"{ev.get('excerpt')[:200]}\" [Page {ev.get('page', 1)}]")
+
+                # Contradictions
+                cnts = w.get("contradictions", [])
+                for c in cnts:
+                    if isinstance(c, dict):
+                        all_contradictions.append(c)
 
         summary_text = "\n".join(worker_summaries) if worker_summaries else "Worker tasks executed successfully."
-        discrepancy_text = "\n".join(f"- {d}" for d in discrepancies_list) if discrepancies_list else "None detected."
-        citations_text = "\n".join(evidence_citations[:4]) if evidence_citations else "Document context verified."
+        findings_text = "\n".join(structured_findings) if structured_findings else summary_text
+        discrepancy_text = "\n".join(f"- {d}" for d in discrepancies_list) if discrepancies_list else "No numerical discrepancies detected."
+        citations_text = "\n".join(evidence_citations[:6]) if evidence_citations else "Document excerpts verified."
+
+        logger.info(f"MANAGER_SYNTHESIS_INPUT_READY execution_id={execution_id} worker_summaries={len(worker_summaries)} evidence_items={len(evidence_citations)} discrepancies={len(discrepancies_list)} contradictions={len(all_contradictions)}")
 
         synthesis_prompt = (
             f"USER OBJECTIVE: '{prompt}'\n\n"
-            f"DOCUMENT SUMMARY:\n{doc_context[:1000] if doc_context else 'No document attached.'}\n\n"
-            f"WORKER FINDINGS:\n{summary_text}\n\n"
-            f"DETERMINISTIC NUMERICAL DISCREPANCIES:\n{discrepancy_text}\n\n"
-            f"EVIDENCE CITATIONS:\n{citations_text}\n\n"
-            "Synthesize a clear, executive-ready Markdown deliverable answering the user's objective. Include headings:\n"
-            "# Executive Summary\n## Key Findings\n## Financial & Numerical Validation\n## Contradiction & Risk Analysis\n## Evidence Traceability\n## Strategic Recommendations"
+            f"DOCUMENT TEXT SNIPPETS:\n{doc_context[:2500] if doc_context else 'No document attached.'}\n\n"
+            f"SPECIALIZED WORKER ANALYSIS FINDINGS:\n{findings_text}\n\n"
+            f"DETERMINISTIC NUMERICAL DISCREPANCIES & CALCULATIONS:\n{discrepancy_text}\n\n"
+            f"EXACT EVIDENCE CITATIONS WITH PAGE NUMBERS:\n{citations_text}\n\n"
+            "Synthesize a thorough, decision-quality, evidence-backed Markdown report answering the user's objective.\n"
+            "Include these Markdown headings:\n"
+            "# Executive Summary\n"
+            "## Key Findings & Evidence\n"
+            "## Technical & Operational Analysis\n"
+            "## Quantitative & Financial Validation\n"
+            "## Contradiction & Risk Analysis\n"
+            "## Evidence Traceability\n"
+            "## Strategic Recommendations"
         )
 
+        content = ""
         try:
             res = manager_provider.generate(
                 prompt=synthesis_prompt,
@@ -249,7 +308,7 @@ class ManagerOrchestrator:
             )
             content = res.content.strip() if res and res.content else ""
         except Exception as e:
-            logger.warning(f"Synthesis Ollama generation fallback: {e}")
+            logger.warning(f"Synthesis Ollama generation error: {e}")
             content = ""
 
         # Clean JSON wrappers if model outputted raw JSON dict
@@ -260,7 +319,7 @@ class ManagerOrchestrator:
                     lines = []
                     for k, v in parsed.items():
                         title = k.replace("_", " ").title()
-                        lines.append(f"### {title}\n")
+                        lines.append(f"## {title}\n")
                         if isinstance(v, list):
                             for item in v:
                                 lines.append(f"- {item}")
@@ -273,21 +332,27 @@ class ManagerOrchestrator:
             except Exception:
                 pass
 
-        if not content or len(content) < 30:
+        if not content or len(content) < 80:
             content = (
-                f"# Executive Summary\n"
-                f"The AI organization completed analysis for objective: **\"{prompt}\"** across 4 specialized workers.\n\n"
-                f"## Key Findings\n"
-                f"{summary_text}\n\n"
-                f"## Financial & Numerical Validation\n"
+                f"# Executive Summary\n\n"
+                f"The Lead Manager synthesized the following evidence-backed findings for objective: **\"{prompt}\"**.\n\n"
+                f"## Key Findings & Evidence\n"
+                f"{findings_text}\n\n"
+                f"## Quantitative & Financial Validation\n"
                 f"{discrepancy_text}\n\n"
                 f"## Evidence Traceability\n"
                 f"{citations_text}\n\n"
                 f"## Strategic Recommendations\n"
-                f"1. Review evidence citations across document pages.\n"
-                f"2. Proceed with operational execution based on validated findings."
+                f"1. Conduct operational review based on verified page-level evidence.\n"
+                f"2. Validate numerical claims against deterministic calculation findings."
             )
-        return content
+
+        return {
+            "report": content,
+            "evidence": all_evidence,
+            "numerical_validations": all_calcs,
+            "contradictions": all_contradictions
+        }
 
     def _publish_state_transition(self, conversation_id: str, execution_id: str, prev: ExecutionState, new: ExecutionState, reason: str):
         logger.info(f"EXECUTION_STATE_TRANSITION execution_id={execution_id} {prev.value} -> {new.value} ({reason})")
