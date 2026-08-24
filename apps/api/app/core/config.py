@@ -17,18 +17,18 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = os.getenv("MINIO_BUCKET", "suprai-documents")
     MINIO_USE_SSL: bool = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
     
-    # Provider API Credentials (auto-strip whitespace)
+    # Provider API Credentials
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip()
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
     
-    # Default Provider Handoff
-    AI_DEFAULT_PROVIDER: str = os.getenv("AI_DEFAULT_PROVIDER", "gemini")
+    # Default Provider Handoff (Local Ollama Engine)
+    AI_DEFAULT_PROVIDER: str = os.getenv("AI_DEFAULT_PROVIDER", "ollama")
     
-    # Role Provider Routing (All Gemini)
-    MANAGER_PROVIDER: str = os.getenv("MANAGER_PROVIDER", "gemini")
-    CONSULTANT_PROVIDER: str = os.getenv("CONSULTANT_PROVIDER", "gemini")
-    ANALYST_PROVIDER: str = os.getenv("ANALYST_PROVIDER", "gemini")
-    RESEARCHER_PROVIDER: str = os.getenv("RESEARCHER_PROVIDER", "gemini")
+    # Role Provider Routing (All Local Ollama)
+    MANAGER_PROVIDER: str = os.getenv("MANAGER_PROVIDER", "ollama")
+    CONSULTANT_PROVIDER: str = os.getenv("CONSULTANT_PROVIDER", "ollama")
+    ANALYST_PROVIDER: str = os.getenv("ANALYST_PROVIDER", "ollama")
+    RESEARCHER_PROVIDER: str = os.getenv("RESEARCHER_PROVIDER", "ollama")
     
     # OpenAI Configurable Models
     OPENAI_MANAGER_MODEL: str = os.getenv("OPENAI_MANAGER_MODEL", "gpt-4o-mini")
@@ -45,10 +45,10 @@ class Settings(BaseSettings):
     # Ollama Configurable Models
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
     OLLAMA_DEFAULT_MODEL: str = os.getenv("OLLAMA_DEFAULT_MODEL", "qwen2.5:0.5b")
-    OLLAMA_MANAGER_MODEL: str = os.getenv("OLLAMA_MANAGER_MODEL", "")
-    OLLAMA_CONSULTANT_MODEL: str = os.getenv("OLLAMA_CONSULTANT_MODEL", "")
-    OLLAMA_ANALYST_MODEL: str = os.getenv("OLLAMA_ANALYST_MODEL", "")
-    OLLAMA_RESEARCHER_MODEL: str = os.getenv("OLLAMA_RESEARCHER_MODEL", "")
+    OLLAMA_MANAGER_MODEL: str = os.getenv("OLLAMA_MANAGER_MODEL", "qwen2.5:0.5b")
+    OLLAMA_CONSULTANT_MODEL: str = os.getenv("OLLAMA_CONSULTANT_MODEL", "qwen2.5:0.5b")
+    OLLAMA_ANALYST_MODEL: str = os.getenv("OLLAMA_ANALYST_MODEL", "qwen2.5:0.5b")
+    OLLAMA_RESEARCHER_MODEL: str = os.getenv("OLLAMA_RESEARCHER_MODEL", "qwen2.5:0.5b")
     
     DEFAULT_ORG_ID: str = os.getenv("DEFAULT_ORG_ID", "default-org-uuid")
     DEFAULT_PROJECT_ID: str = os.getenv("DEFAULT_PROJECT_ID", "default-project-uuid")
@@ -68,19 +68,20 @@ class Settings(BaseSettings):
         elif "researcher" in r:
             provider = self.RESEARCHER_PROVIDER
 
-        return (provider or self.AI_DEFAULT_PROVIDER or "gemini").lower()
+        return (provider or self.AI_DEFAULT_PROVIDER or "ollama").lower()
 
     def get_role_model(self, role_name: str, provider_name: str) -> str:
         r = role_name.lower()
         p = provider_name.lower()
 
-        if "gemini" in p or True:
-            if "manager" in r: return self.GEMINI_MANAGER_MODEL or "gemini-1.5-flash"
-            if "consultant" in r: return self.GEMINI_CONSULTANT_MODEL or "gemini-1.5-flash"
-            if "analyst" in r: return self.GEMINI_ANALYST_MODEL or "gemini-1.5-flash"
-            if "researcher" in r: return self.GEMINI_RESEARCHER_MODEL or "gemini-1.5-flash"
-            return "gemini-1.5-flash"
+        if "ollama" in p or True:
+            role_model = None
+            if "manager" in r: role_model = self.OLLAMA_MANAGER_MODEL
+            elif "consultant" in r: role_model = self.OLLAMA_CONSULTANT_MODEL
+            elif "analyst" in r: role_model = self.OLLAMA_ANALYST_MODEL
+            elif "researcher" in r: role_model = self.OLLAMA_RESEARCHER_MODEL
+            return (role_model or self.OLLAMA_DEFAULT_MODEL or "qwen2.5:0.5b").strip()
 
-        return "gemini-1.5-flash"
+        return "qwen2.5:0.5b"
 
 settings = Settings()
