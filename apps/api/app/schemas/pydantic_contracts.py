@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+class CreateProjectDTO(BaseModel):
+    name: str
+    description: Optional[str] = None
+
 class EvidenceItem(BaseModel):
     evidence_id: Optional[str] = None
     task_id: Optional[str] = None
